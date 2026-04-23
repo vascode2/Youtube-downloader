@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+
+# Output / scratch
+test_out/
+*.m4a
+*.mp3
+*.ogg
+*.mp4
+*.webm
+*.part
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
+.DS_Store
