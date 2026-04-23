@@ -25,6 +25,9 @@ EXAMPLES
   Best available quality (no re-encoding loss):
       ydl "https://youtu.be/VIDEO_ID" --quality highest
 
+  Download a whole playlist (each track as a separate file in a sub-folder):
+      ydl "https://www.youtube.com/playlist?list=PLxxxxx" --playlist
+
 OPTIONS
   url                    The YouTube video URL. Can be a full watch URL,
                          a youtu.be short link, or a URL with extra params
@@ -40,12 +43,15 @@ OPTIONS
                          device compatibility. Default: m4a.
   --out PATH             Folder to save into. Created if missing.
                          Default: {DEFAULT_OUT_DIR}
+  --playlist             Download every video in the playlist (when the URL
+                         contains &list=...). Files go into a sub-folder
+                         named after the playlist, prefixed with track number.
+                         Without this flag, only the single ?v= video is
+                         downloaded.
   -h, --help             Show this help and exit.
 
 NOTES
   - Requires ffmpeg on PATH (winget install Gyan.FFmpeg).
-  - Playlists are intentionally NOT supported in v1; only the single video
-    pointed to by ?v= is downloaded.
 """
 
 
@@ -75,24 +81,36 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_OUT_DIR,
         help=f"Output directory (default: {DEFAULT_OUT_DIR})",
     )
+    p.add_argument(
+        "--playlist",
+        action="store_true",
+        help="Download every video in the playlist (URL must contain &list=...)",
+    )
     return p
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     print(f"Downloading: {args.url}")
-    print(f"  -> {args.fmt} @ {args.quality}kbps into {args.out}")
+    mode = "playlist" if args.playlist else "single video"
+    print(f"  -> {args.fmt} @ {args.quality}kbps ({mode}) into {args.out}")
     try:
-        path = download_audio(
+        paths = download_audio(
             url=args.url,
             quality=args.quality,
             fmt=args.fmt,
             out_dir=args.out,
+            playlist=args.playlist,
         )
     except DownloaderError as e:
         print(f"\nError: {e}", file=sys.stderr)
         return 1
-    print(f"Saved: {path}")
+    if len(paths) == 1:
+        print(f"Saved: {paths[0]}")
+    else:
+        print(f"Saved {len(paths)} files:")
+        for p in paths:
+            print(f"  {p}")
     return 0
 
 
