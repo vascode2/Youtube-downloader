@@ -25,7 +25,7 @@ python -m src.cli "<url>" --quality 320 --format mp3 --out "D:/x"  # overrides
 .\ydl.bat "<url>"                                                  # quick mode: explicit URL
 ```
 
-`ydl.bat` → `ydl.ps1` is a thin convenience wrapper. The `.bat` is the canonical entry point because it sets `-ExecutionPolicy Bypass` (Windows blocks direct `.ps1` execution by default). Do not invoke `.ps1` directly in docs/examples.
+`ydl.bat` → `_ydl.ps1` is a thin convenience wrapper. The `.bat` is the canonical entry point because it sets `-ExecutionPolicy Bypass` (Windows blocks direct `.ps1` execution by default). The `.ps1` is named `_ydl.ps1` (underscore prefix) so PowerShell does NOT resolve the bare name `ydl` to it — otherwise PowerShell prefers `.ps1` over `.bat` in PATH and users hit `UnauthorizedAccess`. Do not invoke `.ps1` directly in docs/examples.
 
 No automated tests yet. Smoke-test with the 19-second public-domain video `https://www.youtube.com/watch?v=jNQXAC9IVRw` ("Me at the zoo") into `./test_out` (gitignored).
 

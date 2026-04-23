@@ -8,7 +8,9 @@ Working notes for the AI agent. Things that bit us, decisions we made, and stuff
 - The first `winget install` attempt for `Gyan.FFmpeg` silently exited without installing. Re-running with `--verbose` succeeded. If install seems to "do nothing", retry with `--verbose` before assuming it worked.
 - Python interpreter on this machine: `C:/Users/Yoon/AppData/Local/Microsoft/WindowsApps/python3.12.exe` (Windows Store Python 3.12). System install — no venv yet. The path is hardcoded in `ydl.ps1` — update there if Python moves.
 - Workspace path has a space (`g:\My Drive\...`). Always quote paths in PowerShell.
-- **Direct `.ps1` execution is blocked** by default execution policy. Always go through `ydl.bat` (which passes `-ExecutionPolicy Bypass`). Don't tell users to run `.\ydl.ps1` — they'll hit `UnauthorizedAccess`.
+- **Direct `.ps1` execution is blocked** by default execution policy. Always go through `ydl.bat` (which passes `-ExecutionPolicy Bypass`). Don't tell users to run `.\_ydl.ps1` — they'll hit `UnauthorizedAccess`.
+- **PowerShell prefers `.ps1` over `.bat`** when both share a stem in PATH. That's why the script is named `_ydl.ps1` (underscore prefix) and only the `.bat` is named `ydl` — so `ydl` from PowerShell resolves to the bypass-wrapper, not the blocked script.
+- **PowerShell range gotcha**: `$args[1..0]` does NOT return empty when `$args.Count -eq 1`; it returns `@($args[1], $args[0])` (ranges are bidirectional). Always guard with `if ($args.Count -gt 1)` before slicing.
 
 ## Design decisions (do not relitigate without asking)
 
