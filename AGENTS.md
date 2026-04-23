@@ -21,7 +21,11 @@ Minimal Python CLI wrapping `yt-dlp` + `ffmpeg` to download YouTube audio. v1 sc
 pip install -r requirements.txt
 python -m src.cli "<youtube-url>"                                  # default: 128k m4a
 python -m src.cli "<url>" --quality 320 --format mp3 --out "D:/x"  # overrides
+.\ydl.bat                                                          # quick mode: URL from clipboard
+.\ydl.bat "<url>"                                                  # quick mode: explicit URL
 ```
+
+`ydl.bat` → `ydl.ps1` is a thin convenience wrapper. The `.bat` is the canonical entry point because it sets `-ExecutionPolicy Bypass` (Windows blocks direct `.ps1` execution by default). Do not invoke `.ps1` directly in docs/examples.
 
 No automated tests yet. Smoke-test with the 19-second public-domain video `https://www.youtube.com/watch?v=jNQXAC9IVRw` ("Me at the zoo") into `./test_out` (gitignored).
 

@@ -23,6 +23,32 @@ python -m src.cli "https://www.youtube.com/watch?v=VIDEO_ID"
 python -m src.cli "https://www.youtube.com/watch?v=VIDEO_ID" --quality 320 --format mp3 --out "D:/music"
 ```
 
+### Quick mode (recommended) — `ydl`
+
+For everyday use, `ydl.bat` is a one-shot wrapper:
+
+```powershell
+ydl "https://www.youtube.com/watch?v=VIDEO_ID"   # explicit URL
+ydl                                              # downloads URL from clipboard
+ydl --quality 320 --format mp3                   # clipboard URL + overrides
+```
+
+**Fastest workflow**: copy the YouTube URL in your browser → run `ydl` → done.
+
+To make `ydl` work from any directory, add the project folder to your `PATH`:
+
+```powershell
+# One-time setup (current user)
+[Environment]::SetEnvironmentVariable(
+    "PATH",
+    [Environment]::GetEnvironmentVariable("PATH", "User") + ";G:\My Drive\Projects\Youtube-downloader",
+    "User"
+)
+# Restart your terminal afterwards.
+```
+
+Or pin `ydl.bat` to your taskbar / make a desktop shortcut for one-click clipboard downloads.
+
 ### Options
 
 | Flag | Choices | Default |
