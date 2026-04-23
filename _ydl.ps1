@@ -13,8 +13,8 @@ $python = "C:/Users/Yoon/AppData/Local/Microsoft/WindowsApps/python3.12.exe"
 
 # If first arg looks like a flag (or no args), pull URL from clipboard.
 if ($args.Count -eq 0 -or $args[0].StartsWith("--")) {
-    # If user explicitly asked for help, pass through to python (no clipboard).
-    if ($args -contains "--help" -or $args -contains "-h") {
+    # Pass through directly (no clipboard) for help and batch mode.
+    if ($args -contains "--help" -or $args -contains "-h" -or $args -contains "--batch") {
         Push-Location $scriptDir
         try { & $python -m src.cli @args; $exit = $LASTEXITCODE } finally { Pop-Location }
         exit $exit
