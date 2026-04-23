@@ -55,6 +55,7 @@ The installer also sets your user-scope execution policy to `RemoteSigned` (Micr
 | `--out` | any folder path | `C:/Users/Yoon/Music/0_temp` |
 | `--playlist` | (flag, no value) | off — downloads only the single `?v=` video |
 | `--batch FILE` | path to text file | off |
+| `--search FILE` | path to text file (song names) | off |
 | `--no-rename` | (flag, no value) | off — default cleans titles to `<Artist> - <Title>` |
 | `--no-tags` | (flag, no value) | off — default embeds Title/Artist/Year + cover art |
 
@@ -121,6 +122,35 @@ I AM (IVE) – https://www.youtube.com/watch?v=6ZUIwj3FgUY
 - A failure on one URL does NOT stop the batch
 - Summary at the end lists every failed URL with its error message
 - Exit code: `0` if all succeeded, `1` if any failed
+
+### Resolve song names to URLs (and make a YouTube playlist)
+
+If you only have a list of **song names** (no URLs yet), use `--search`:
+
+```powershell
+ydl --search names.txt
+```
+
+For each line in `names.txt`, this asks YouTube's search for the top result. Lines are free-form (`"Dynamite - BTS"`, `"BTS Dynamite"`, `"TOMBOY (G)I-DLE"`). Output:
+
+1. **`names.urls.txt`** — a batch file you can immediately download:
+   ```powershell
+   ydl --batch names.urls.txt
+   ```
+2. **A YouTube playlist URL** printed to the terminal — open it in your browser; YouTube will start playing the first video and show a *Save* button. Click *Save* → *+ Create new playlist* to save the list into your account.
+
+```
+Resolving 3 song(s) via YouTube search...
+  OK    Dynamite - BTS    -> BTS (방탄소년단) 'Dynamite' Official MV
+  ...
+Wrote 3 URL(s) to names.urls.txt
+YouTube playlist URL:
+  https://www.youtube.com/watch_videos?video_ids=gdZLi9oWNZg,Jh4QFaPmdss,yKNxeF4KMsY
+```
+
+**Notes:**
+- YouTube's `watch_videos` endpoint accepts at most **50 IDs** per playlist URL; longer lists are truncated (the `.urls.txt` keeps everything).
+- Best-effort search; spot-check the picks before saving the playlist (an obscure song name may match a cover or live clip)
 
 ## Project layout
 

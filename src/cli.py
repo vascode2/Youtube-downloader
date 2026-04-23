@@ -37,6 +37,53 @@ def parse_batch_file(path: Path) -> list[str]:
     return urls
 
 
+def parse_song_file(path: Path) -> list[str]:
+    """Read song-name lines for `--search`.
+
+    Each non-blank, non-`#` line is treated as a search query. Free-form OK
+    (e.g. "Dynamite - BTS", "BTS Dynamite", "TOMBOY (G)I-DLE").
+    Lines that already contain a YouTube URL are skipped (assumed resolved).
+    """
+    if not path.exists():
+        raise DownloaderError(f"Song list file not found: {path}")
+    queries: list[str] = []
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if _URL_RE.search(line):
+            continue
+        queries.append(line)
+    return queries
+
+
+def resolve_songs(queries: list[str]) -> list[tuple[str, str | None, str | None]]:
+    """For each query, ask yt-dlp's search for the top result.
+
+    Returns list of (query, video_id, yt_title). video_id is None on failure.
+    """
+    from yt_dlp import YoutubeDL
+
+    opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "skip_download": True,
+        "extract_flat": "in_playlist",
+        "default_search": "ytsearch1",
+    }
+    out: list[tuple[str, str | None, str | None]] = []
+    with YoutubeDL(opts) as ydl:
+        for q in queries:
+            try:
+                info = ydl.extract_info(f"{q} official", download=False)
+                entry = info["entries"][0] if "entries" in info else info
+                out.append((q, entry["id"], entry.get("title")))
+            except Exception as e:  # noqa: BLE001
+                print(f"  FAIL  {q}: {e}", file=sys.stderr)
+                out.append((q, None, None))
+    return out
+
+
 HELP_EPILOG = f"""\
 EXAMPLES
   Download with all defaults (192kbps M4A into {DEFAULT_OUT_DIR}):
@@ -60,6 +107,14 @@ EXAMPLES
   Batch download: read URLs from a text file (one per line, free-form OK):
       ydl --batch my_songs.txt
       ydl --batch my_songs.txt --quality 192
+
+  Resolve a list of song NAMES to YouTube URLs (no download). Writes
+  '<input>.urls.txt' next to the input and prints a YouTube playlist URL
+  that opens all matches in your browser:
+      ydl --search names.txt
+      # then either:
+      ydl --batch names.urls.txt          # download all as audio, or
+      # open the printed watch_videos URL and click Save -> Create playlist
 
 OPTIONS
   url                    The YouTube video URL. Can be a full watch URL,
@@ -87,6 +142,12 @@ OPTIONS
                          picked up; titles, dashes, blank lines, and lines
                          starting with `#` are ignored. Failures do NOT stop
                          the batch; a summary of failures prints at the end.
+  --search FILE          Resolve song NAMES (not URLs) in FILE to YouTube URLs
+                         using yt-dlp's search. One song per line, free-form
+                         ("Dynamite - BTS", "BTS Dynamite", etc.). Writes the
+                         resolved URLs to '<input>.urls.txt' and prints a
+                         YouTube playlist URL containing all matches (max 50,
+                         YouTube limit). Does NOT download.
   --no-rename            Keep yt-dlp's original filename. By default, files
                          are renamed to '<Artist> - <Title>.<ext>' (e.g.
                          "(여자)아이들((G)I-DLE) - 'Allergy' Official
@@ -141,6 +202,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Read URLs from a text file (one per line; free-form lines OK)",
     )
     p.add_argument(
+        "--search",
+        metavar="FILE",
+        help="Resolve song NAMES (not URLs) in FILE to YouTube URLs (no download)",
+    )
+    p.add_argument(
         "--no-rename",
         dest="rename",
         action="store_false",
@@ -174,8 +240,59 @@ def _download_one(url: str, args: argparse.Namespace) -> tuple[bool, list, str]:
         return False, [], f"{type(e).__name__}: {e}"
 
 
+def _run_search(in_path: Path) -> int:
+    """Resolve song names to YouTube URLs; write `<input>.urls.txt`; print playlist URL."""
+    try:
+        queries = parse_song_file(in_path)
+    except DownloaderError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 1
+    if not queries:
+        print(f"Error: no song names found in {in_path}", file=sys.stderr)
+        return 1
+
+    print(f"Resolving {len(queries)} song(s) via YouTube search...")
+    results = resolve_songs(queries)
+
+    out_lines: list[str] = [f"# Resolved from {in_path.name}"]
+    ids: list[str] = []
+    failures: list[str] = []
+    for query, vid, yt_title in results:
+        if vid:
+            url = f"https://www.youtube.com/watch?v={vid}"
+            out_lines.append(f"{query} - {url}")
+            ids.append(vid)
+            print(f"  OK    {query[:40]:40s} -> {(yt_title or '')[:50]}")
+        else:
+            out_lines.append(f"# FAILED: {query}")
+            failures.append(query)
+
+    out_path = in_path.with_suffix(in_path.suffix + ".urls.txt") if in_path.suffix else in_path.with_name(in_path.name + ".urls.txt")
+    # Cleaner: 'songs.txt' -> 'songs.urls.txt'
+    if in_path.suffix == ".txt":
+        out_path = in_path.with_name(in_path.stem + ".urls.txt")
+    out_path.write_text("\n".join(out_lines) + "\n", encoding="utf-8")
+
+    print(f"\nWrote {len(ids)} URL(s) to {out_path}" + (f"  ({len(failures)} failed)" if failures else ""))
+    print(f"Next: ydl --batch \"{out_path}\"")
+
+    if ids:
+        # YouTube's anonymous-playlist endpoint accepts up to 50 ids.
+        capped = ids[:50]
+        playlist_url = "https://www.youtube.com/watch_videos?video_ids=" + ",".join(capped)
+        extra = "" if len(ids) <= 50 else f"  (capped to first 50 of {len(ids)})"
+        print(f"\nYouTube playlist URL{extra}:")
+        print(f"  {playlist_url}")
+        print("  Open it, then click Save -> + Create new playlist to save into your account.")
+
+    return 0 if not failures else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+
+    if args.search:
+        return _run_search(Path(args.search))
 
     # Determine the URL list.
     if args.batch:
