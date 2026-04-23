@@ -306,7 +306,7 @@ def download_audio(
         outtmpl = str(
             out_path
             / "%(playlist_title,playlist|_no_playlist)s"
-            / "%(playlist_index)03d - %(title)s.%(ext)s"
+            / "%(title)s.%(ext)s"
         )
     else:
         outtmpl = str(out_path / "%(title)s.%(ext)s")
@@ -387,10 +387,6 @@ def download_audio(
         if final.exists():
             if rename:
                 cleaned = _clean_title(entry.get("title", final.stem))
-                # Preserve the playlist track-number prefix (e.g. "001 - ").
-                idx_match = re.match(r"^(\d{2,4})\s*-\s*", final.stem)
-                if idx_match:
-                    cleaned = f"{idx_match.group(1)} - {cleaned}"
                 target = final.with_name(_safe_filename(cleaned) + final.suffix)
                 if target != final and not target.exists():
                     try:

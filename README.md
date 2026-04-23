@@ -61,12 +61,12 @@ The installer also sets your user-scope execution policy to `RemoteSigned` (Micr
 
 ### Playlist downloads
 
-If the URL contains `&list=...` (or is a `playlist?list=...` URL), pass `--playlist` to download every video as its own audio file. Files land in a sub-folder named after the playlist, prefixed with track number:
+If the URL contains `&list=...` (or is a `playlist?list=...` URL), pass `--playlist` to download every video as its own audio file. Files land in a sub-folder named after the playlist:
 
 ```powershell
 ydl "https://www.youtube.com/playlist?list=PLxxxxxxx" --playlist
-# -> C:/Users/Yoon/Music/0_temp/<Playlist Title>/001 - <Track 1>.m4a
-#    C:/Users/Yoon/Music/0_temp/<Playlist Title>/002 - <Track 2>.m4a
+# -> C:/Users/Yoon/Music/0_temp/<Playlist Title>/<Artist> - <Track 1>.m4a
+#    C:/Users/Yoon/Music/0_temp/<Playlist Title>/<Artist> - <Track 2>.m4a
 #    ...
 ```
 

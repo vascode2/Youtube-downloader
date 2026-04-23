@@ -20,7 +20,7 @@ function Resolve-PathArgs {
     for ($i = 0; $i -lt $InArgs.Count; $i++) {
         $a = $InArgs[$i]
         $out.Add($a)
-        if (($a -eq "--batch" -or $a -eq "--out") -and ($i + 1) -lt $InArgs.Count) {
+        if (($a -eq "--batch" -or $a -eq "--out" -or $a -eq "--search") -and ($i + 1) -lt $InArgs.Count) {
             $val = $InArgs[$i + 1]
             if (-not [System.IO.Path]::IsPathRooted($val)) {
                 $val = [System.IO.Path]::GetFullPath((Join-Path $origCwd $val))
@@ -36,8 +36,8 @@ $args = Resolve-PathArgs -InArgs $args
 
 # If first arg looks like a flag (or no args), pull URL from clipboard.
 if ($args.Count -eq 0 -or $args[0].StartsWith("--")) {
-    # Pass through directly (no clipboard) for help and batch mode.
-    if ($args -contains "--help" -or $args -contains "-h" -or $args -contains "--batch") {
+    # Pass through directly (no clipboard) for help, batch, and search modes.
+    if ($args -contains "--help" -or $args -contains "-h" -or $args -contains "--batch" -or $args -contains "--search") {
         Push-Location $scriptDir
         try { & $python -m src.cli @args; $exit = $LASTEXITCODE } finally { Pop-Location }
         exit $exit
