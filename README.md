@@ -54,6 +54,7 @@ The installer also sets your user-scope execution policy to `RemoteSigned` (Micr
 | `--format` | `m4a`, `mp3`, `ogg` | `m4a` |
 | `--out` | any folder path | `C:/Users/Yoon/Music/0_temp` |
 | `--playlist` | (flag, no value) | off — downloads only the single `?v=` video |
+| `--batch FILE` | path to text file | off |
 
 ### Playlist downloads
 
@@ -67,6 +68,31 @@ ydl "https://www.youtube.com/playlist?list=PLxxxxxxx" --playlist
 ```
 
 Without `--playlist`, even a URL like `?v=ID&list=...` only downloads the single `?v=` video (this is the safer default — one click != accidentally downloading a 200-track playlist).
+
+### Batch downloads (many URLs from a file)
+
+For large lists, put URLs in a text file and pass `--batch`:
+
+```powershell
+ydl --batch songs.txt                  # default 128k m4a
+ydl --batch songs.txt --quality 192    # any other flag applies to all
+```
+
+**File format** — one URL per line, free-form lines OK. Anything containing a YouTube URL is picked up; titles, dashes, blank lines, and lines starting with `#` are ignored. Your own list works as-is:
+
+```
+# K-Pop Collection
+Dynamite (BTS) – https://www.youtube.com/watch?v=gdZLi9oWNZg
+My Universe (Coldplay x BTS) – https://www.youtube.com/watch?v=bO9O2L2wW3Y
+I AM (IVE) – https://www.youtube.com/watch?v=6ZUIwj3FgUY
+...
+```
+
+**Behavior:**
+- Downloads each URL in sequence with `[i/N]` progress
+- A failure on one URL does NOT stop the batch
+- Summary at the end lists every failed URL with its error message
+- Exit code: `0` if all succeeded, `1` if any failed
 
 ## Project layout
 
@@ -84,7 +110,7 @@ Features (implement on demand — use the `/add-feature` prompt to keep changes 
 - [ ] **Video downloads** — `--video` flag, mp4 container, `bestvideo+bestaudio` format
 - [ ] **Quality presets** — `highest | 320 | 256 | 128 | 64` for both audio and video
 - [ ] **Device presets** — `--for ios|android|windows|mac|linux|m4a|mp3|ogg` mapping to `(fmt, quality)` pairs
-- [ ] **Playlist / channel batch** — ~~drop `noplaylist=True`, add `--playlist` flag~~ ✅ done
+- [ ] **Playlist / channel batch** — ~~drop `noplaylist=True`, add `--playlist` flag~~ ✅ done (also `--batch FILE` for ad-hoc URL lists)
 - [ ] **Desktop GUI** — PySide6 window (paste link, dropdowns, progress bar) reusing `download_audio()` on a `QThread`
 - [ ] **AI post-processing** — vocal removal, voice extraction, denoise, instrument isolation, loudness balance, audio upscale (Demucs + Resemble Enhance + pyloudnorm). See [.copilot/skills/ai-postprocess/SKILL.md](.copilot/skills/ai-postprocess/SKILL.md) for the build plan.
 - [ ] **Pip-install global command** — `pip install -e .` exposing a `ydl` console script

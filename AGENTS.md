@@ -21,6 +21,7 @@ Minimal Python CLI wrapping `yt-dlp` + `ffmpeg` to download YouTube audio. v1 sc
 pip install -r requirements.txt
 python -m src.cli "<youtube-url>"                                  # default: 128k m4a
 python -m src.cli "<url>" --quality 320 --format mp3 --out "D:/x"  # overrides
+python -m src.cli --batch songs.txt                                # many URLs from file
 .\Install.bat                                                      # one-time: register `ydl` PowerShell function
 ydl                                                                # quick mode: URL from clipboard
 ydl "<url>"                                                        # quick mode: explicit URL

@@ -3,9 +3,38 @@
 from __future__ import annotations
 
 import argparse
+import re
 import sys
+from pathlib import Path
 
 from .downloader import DEFAULT_OUT_DIR, DownloaderError, download_audio
+
+
+# Matches a YouTube watch / youtu.be / playlist URL anywhere in a line.
+_URL_RE = re.compile(
+    r"https?://(?:www\.|m\.|music\.)?(?:youtube\.com/\S+|youtu\.be/\S+)",
+    re.IGNORECASE,
+)
+
+
+def parse_batch_file(path: Path) -> list[str]:
+    """Extract YouTube URLs from a free-form text file.
+
+    - One URL per line; the rest of the line (title, dash, etc.) is ignored.
+    - Blank lines, lines starting with `#`, and lines without a URL are skipped.
+    - Order is preserved; duplicates are kept.
+    """
+    if not path.exists():
+        raise DownloaderError(f"Batch file not found: {path}")
+    urls: list[str] = []
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        m = _URL_RE.search(line)
+        if m:
+            urls.append(m.group(0).rstrip(".,);]"))
+    return urls
 
 
 HELP_EPILOG = f"""\
@@ -28,10 +57,15 @@ EXAMPLES
   Download a whole playlist (each track as a separate file in a sub-folder):
       ydl "https://www.youtube.com/playlist?list=PLxxxxx" --playlist
 
+  Batch download: read URLs from a text file (one per line, free-form OK):
+      ydl --batch my_songs.txt
+      ydl --batch my_songs.txt --quality 192
+
 OPTIONS
   url                    The YouTube video URL. Can be a full watch URL,
                          a youtu.be short link, or a URL with extra params
                          (?list=..., &t=...). Quote it to avoid shell issues.
+                         Omit when using --batch.
   --quality {{64,128,192,256,320,highest}}
                          Target audio bitrate in kbps. 'highest' keeps the
                          best stream YouTube offers (no re-encoding).
@@ -48,6 +82,11 @@ OPTIONS
                          named after the playlist, prefixed with track number.
                          Without this flag, only the single ?v= video is
                          downloaded.
+  --batch FILE           Read URLs from FILE (one per line). Free-form lines
+                         are OK -- anything that contains a YouTube URL is
+                         picked up; titles, dashes, blank lines, and lines
+                         starting with `#` are ignored. Failures do NOT stop
+                         the batch; a summary of failures prints at the end.
   -h, --help             Show this help and exit.
 
 NOTES
@@ -62,7 +101,11 @@ def build_parser() -> argparse.ArgumentParser:
         epilog=HELP_EPILOG,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    p.add_argument("url", help="YouTube video URL (quote it)")
+    p.add_argument(
+        "url",
+        nargs="?",
+        help="YouTube video URL (quote it). Omit when using --batch.",
+    )
     p.add_argument(
         "--quality",
         default="128",
@@ -86,32 +129,94 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Download every video in the playlist (URL must contain &list=...)",
     )
+    p.add_argument(
+        "--batch",
+        metavar="FILE",
+        help="Read URLs from a text file (one per line; free-form lines OK)",
+    )
     return p
 
 
-def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
-    print(f"Downloading: {args.url}")
-    mode = "playlist" if args.playlist else "single video"
-    print(f"  -> {args.fmt} @ {args.quality}kbps ({mode}) into {args.out}")
+def _download_one(url: str, args: argparse.Namespace) -> tuple[bool, list, str]:
+    """Download a single URL. Returns (ok, paths, error_message)."""
     try:
         paths = download_audio(
-            url=args.url,
+            url=url,
             quality=args.quality,
             fmt=args.fmt,
             out_dir=args.out,
             playlist=args.playlist,
         )
+        return True, paths, ""
     except DownloaderError as e:
-        print(f"\nError: {e}", file=sys.stderr)
-        return 1
-    if len(paths) == 1:
-        print(f"Saved: {paths[0]}")
+        return False, [], str(e)
+    except Exception as e:  # noqa: BLE001 -- catch-all for batch resilience
+        return False, [], f"{type(e).__name__}: {e}"
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+
+    # Determine the URL list.
+    if args.batch:
+        try:
+            urls = parse_batch_file(Path(args.batch))
+        except DownloaderError as e:
+            print(f"Error: {e}", file=sys.stderr)
+            return 1
+        if not urls:
+            print(f"Error: no URLs found in {args.batch}", file=sys.stderr)
+            return 1
+        if args.url:
+            urls.insert(0, args.url)  # allow mixing positional + batch
+        print(f"Batch mode: {len(urls)} URL(s) from {args.batch}")
+        print(f"  -> {args.fmt} @ {args.quality}kbps into {args.out}")
     else:
-        print(f"Saved {len(paths)} files:")
-        for p in paths:
-            print(f"  {p}")
-    return 0
+        if not args.url:
+            print("Error: URL is required (or use --batch FILE).", file=sys.stderr)
+            return 2
+        urls = [args.url]
+        mode = "playlist" if args.playlist else "single video"
+        print(f"Downloading: {args.url}")
+        print(f"  -> {args.fmt} @ {args.quality}kbps ({mode}) into {args.out}")
+
+    # Single-URL fast path keeps the original output format.
+    if len(urls) == 1 and not args.batch:
+        ok, paths, err = _download_one(urls[0], args)
+        if not ok:
+            print(f"\nError: {err}", file=sys.stderr)
+            return 1
+        if len(paths) == 1:
+            print(f"Saved: {paths[0]}")
+        else:
+            print(f"Saved {len(paths)} files:")
+            for p in paths:
+                print(f"  {p}")
+        return 0
+
+    # Batch loop with summary.
+    successes: list[tuple[str, list]] = []
+    failures: list[tuple[str, str]] = []
+    for i, url in enumerate(urls, 1):
+        print(f"\n[{i}/{len(urls)}] {url}")
+        ok, paths, err = _download_one(url, args)
+        if ok:
+            for p in paths:
+                print(f"  saved: {p.name}")
+            successes.append((url, paths))
+        else:
+            print(f"  FAILED: {err}", file=sys.stderr)
+            failures.append((url, err))
+
+    # Summary.
+    print("\n" + "=" * 60)
+    print(f"Batch complete: {len(successes)} ok, {len(failures)} failed, {len(urls)} total")
+    if failures:
+        print("\nFailures:")
+        for url, err in failures:
+            print(f"  {url}")
+            print(f"    -> {err}")
+    return 0 if not failures else 1
 
 
 if __name__ == "__main__":
