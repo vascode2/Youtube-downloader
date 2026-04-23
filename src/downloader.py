@@ -6,6 +6,7 @@ or AI-processing pipelines.
 
 from __future__ import annotations
 
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -33,6 +34,95 @@ def _safe_filename(name: str) -> str:
 class DownloaderError(Exception):
     """User-facing error from the downloader."""
 
+
+# Trailing noise patterns commonly stuck on YouTube music video titles.
+# Stripped repeatedly until stable so combined suffixes (e.g. "[MV] ... Official Video")
+# all come off.
+_NOISE_SUFFIX_RE = re.compile(
+    r"\s*[\(\[]?\s*"
+    r"(?:official\s+)?"
+    r"(music\s*video|music\s*audio|lyric\s*video|lyrics?|"
+    r"performance\s*video|visualizer|audio|video|m\s*/?\s*v|mv)"
+    r"\s*[\)\]]?\s*$",
+    re.IGNORECASE,
+)
+_QUOTE_RE = re.compile(r"^['\"\u2018\u2019\u201c\u201d](.+?)['\"\u2018\u2019\u201c\u201d]$")
+_SPLIT_RE = re.compile(r"\s+[-\u2013\u2014]\s+")  # ' - ', ' – ', ' — '
+
+
+def _latin_count(s: str) -> int:
+    return sum(1 for c in s if c.isascii() and c.isalpha())
+
+
+def _pick_artist_alias(artist: str) -> str:
+    """Given a messy artist field with possibly nested parens and mixed scripts,
+    pick the variant with the most Latin letters (usually the romanized name).
+
+    Examples:
+        '(여자)아이들((G)I-DLE)' -> '(G)I-DLE'
+        'BTS (방탄소년단)'        -> 'BTS'
+        'Coldplay'                  -> 'Coldplay'
+    """
+    candidates: list[str] = []
+    depth = 0
+    start = -1
+    for i, c in enumerate(artist):
+        if c == "(":
+            if depth == 0:
+                start = i + 1
+            depth += 1
+        elif c == ")" and depth > 0:
+            depth -= 1
+            if depth == 0 and start >= 0:
+                candidates.append(artist[start:i].strip())
+                start = -1
+    # Bare text outside any parens.
+    bare = re.sub(r"\([^()]*(?:\([^()]*\)[^()]*)*\)", "", artist).strip()
+    if bare:
+        candidates.append(bare)
+    if not candidates:
+        return artist.strip()
+    best = max(candidates, key=_latin_count)
+    if _latin_count(best) >= 2:
+        return best.strip()
+    return artist.strip()
+
+
+def _clean_title(raw: str) -> str:
+    """Convert a YouTube video title to '<Artist> - <Title>' best-effort.
+
+    Returns the cleaned form, or the stripped original if it can't be parsed.
+    Pure / no I/O / safe to unit-test.
+    """
+    s = raw.strip()
+    # Repeatedly strip trailing noise ("... Official Music Video", "[MV]", etc.)
+    for _ in range(4):
+        new = _NOISE_SUFFIX_RE.sub("", s).strip().rstrip("-–— ").strip()
+        if new == s or not new:
+            break
+        s = new
+
+    parts = _SPLIT_RE.split(s, maxsplit=1)
+    if len(parts) == 2:
+        artist_raw, title_raw = parts[0].strip(), parts[1].strip()
+    else:
+        # Fallback: pattern "Artist 'Title'" with no dash (common on K-pop MVs).
+        m = re.match(
+            r"^(.+?)\s+['\"\u2018\u201c](.+?)['\"\u2019\u201d]\s*$", s
+        )
+        if not m:
+            return s
+        artist_raw, title_raw = m.group(1).strip(), m.group(2).strip()
+
+    # Title: unwrap surrounding quotes if present.
+    qm = _QUOTE_RE.match(title_raw)
+    if qm:
+        title_raw = qm.group(1).strip()
+
+    artist = _pick_artist_alias(artist_raw)
+    if not artist or not title_raw:
+        return s
+    return f"{artist} - {title_raw}"
 
 def _default_progress(d: dict) -> None:
     status = d.get("status")
@@ -62,6 +152,7 @@ def download_audio(
     out_dir: str | Path = DEFAULT_OUT_DIR,
     progress_hook: Optional[Callable[[dict], None]] = None,
     playlist: bool = False,
+    rename: bool = True,
 ) -> list[Path]:
     """Download a YouTube URL as audio file(s).
 
@@ -75,6 +166,10 @@ def download_audio(
             file (into `out_dir/<playlist title>/`). If False (default), only
             the single video pointed to by `?v=` is downloaded, even if the URL
             also contains `&list=`.
+        rename: If True (default), clean the YouTube title into
+            '<Artist> - <Title>.<ext>' after download (best-effort heuristic;
+            falls back to the original if parsing fails or the target name
+            collides). Pass False to keep yt-dlp's filename verbatim.
 
     Returns:
         List of paths to the downloaded audio file(s). Single-element list
@@ -165,6 +260,19 @@ def download_audio(
                 pass  # if move fails, just keep the file where it is
 
         if final.exists():
+            if rename:
+                cleaned = _clean_title(entry.get("title", final.stem))
+                # Preserve the playlist track-number prefix (e.g. "001 - ").
+                idx_match = re.match(r"^(\d{2,4})\s*-\s*", final.stem)
+                if idx_match:
+                    cleaned = f"{idx_match.group(1)} - {cleaned}"
+                target = final.with_name(_safe_filename(cleaned) + final.suffix)
+                if target != final and not target.exists():
+                    try:
+                        final.replace(target)
+                        final = target
+                    except OSError:
+                        pass  # keep yt-dlp name on any rename failure
             results.append(final)
 
     if not results:

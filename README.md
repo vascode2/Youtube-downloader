@@ -55,6 +55,7 @@ The installer also sets your user-scope execution policy to `RemoteSigned` (Micr
 | `--out` | any folder path | `C:/Users/Yoon/Music/0_temp` |
 | `--playlist` | (flag, no value) | off — downloads only the single `?v=` video |
 | `--batch FILE` | path to text file | off |
+| `--no-rename` | (flag, no value) | off — default cleans titles to `<Artist> - <Title>` |
 
 ### Playlist downloads
 
@@ -68,6 +69,20 @@ ydl "https://www.youtube.com/playlist?list=PLxxxxxxx" --playlist
 ```
 
 Without `--playlist`, even a URL like `?v=ID&list=...` only downloads the single `?v=` video (this is the safer default — one click != accidentally downloading a 200-track playlist).
+
+### Auto-rename to `<Artist> - <Title>`
+
+By default, downloaded files are renamed from YouTube's verbose titles to a clean `<Artist> - <Title>.<ext>` form. Examples:
+
+| YouTube title | Saved as |
+|---|---|
+| `(여자)아이들((G)I-DLE) - 'Allergy' Official Music Video` | `(G)I-DLE - Allergy.m4a` |
+| `BTS (방탄소년단) 'Dynamite' Official MV` | `BTS - Dynamite.m4a` |
+| `Coldplay - Yellow (Official Video)` | `Coldplay - Yellow.m4a` |
+
+The heuristic strips trailing noise (`Official Music Video`, `[MV]`, `(Audio)`, ...), unwraps quoted titles, and — when the artist is in mixed scripts — prefers the romanized variant inside parens. If the title doesn't fit a known pattern, the original name is kept.
+
+Pass `--no-rename` to skip cleanup and keep yt-dlp's filename verbatim.
 
 ### Batch downloads (many URLs from a file)
 

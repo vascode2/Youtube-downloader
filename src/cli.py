@@ -87,6 +87,10 @@ OPTIONS
                          picked up; titles, dashes, blank lines, and lines
                          starting with `#` are ignored. Failures do NOT stop
                          the batch; a summary of failures prints at the end.
+  --no-rename            Keep yt-dlp's original filename. By default, files
+                         are renamed to '<Artist> - <Title>.<ext>' (e.g.
+                         "(여자)아이들((G)I-DLE) - 'Allergy' Official
+                         Music Video.m4a" -> "(G)I-DLE - Allergy.m4a").
   -h, --help             Show this help and exit.
 
 NOTES
@@ -134,6 +138,12 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="FILE",
         help="Read URLs from a text file (one per line; free-form lines OK)",
     )
+    p.add_argument(
+        "--no-rename",
+        dest="rename",
+        action="store_false",
+        help="Keep yt-dlp's original filename (skip the 'Artist - Title' cleanup)",
+    )
     return p
 
 
@@ -146,6 +156,7 @@ def _download_one(url: str, args: argparse.Namespace) -> tuple[bool, list, str]:
             fmt=args.fmt,
             out_dir=args.out,
             playlist=args.playlist,
+            rename=args.rename,
         )
         return True, paths, ""
     except DownloaderError as e:
