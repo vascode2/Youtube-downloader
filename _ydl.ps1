@@ -23,10 +23,14 @@ if ($args.Count -eq 0 -or $args[0].StartsWith("--")) {
         exit 1
     }
     Write-Host "Using clipboard URL: $url" -ForegroundColor Cyan
-    $passthrough = $args
+    $passthrough = @($args)
 } else {
     $url = $args[0]
-    $passthrough = $args[1..($args.Count - 1)]
+    if ($args.Count -gt 1) {
+        $passthrough = @($args[1..($args.Count - 1)])
+    } else {
+        $passthrough = @()
+    }
 }
 
 Push-Location $scriptDir
