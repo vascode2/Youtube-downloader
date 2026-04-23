@@ -56,6 +56,7 @@ The installer also sets your user-scope execution policy to `RemoteSigned` (Micr
 | `--playlist` | (flag, no value) | off — downloads only the single `?v=` video |
 | `--batch FILE` | path to text file | off |
 | `--no-rename` | (flag, no value) | off — default cleans titles to `<Artist> - <Title>` |
+| `--no-tags` | (flag, no value) | off — default embeds Title/Artist/Year + cover art |
 
 ### Playlist downloads
 
@@ -83,6 +84,18 @@ By default, downloaded files are renamed from YouTube's verbose titles to a clea
 The heuristic strips trailing noise (`Official Music Video`, `[MV]`, `(Audio)`, ...), unwraps quoted titles, and — when the artist is in mixed scripts — prefers the romanized variant inside parens. If the title doesn't fit a known pattern, the original name is kept.
 
 Pass `--no-rename` to skip cleanup and keep yt-dlp's filename verbatim.
+
+### Embedded metadata + cover art (tags)
+
+By default, downloaded files get the following tags written (visible in Windows Explorer's *Details* tab, iTunes, foobar2000, etc.):
+
+- **Title** — the parsed song title (e.g. `TOMBOY`)
+- **Artist** — the parsed artist (e.g. `(G)I-DLE`)
+- **Year** — from YouTube's upload date
+- **Track #** — when downloading via `--playlist`
+- **Cover art** — the YouTube thumbnail
+
+Uses [mutagen](https://mutagen.readthedocs.io/) to write only the fields that matter, so the file isn't polluted with the full video description (lyrics, promo links). Pass `--no-tags` to skip tagging entirely.
 
 ### Batch downloads (many URLs from a file)
 
