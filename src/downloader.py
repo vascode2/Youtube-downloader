@@ -88,11 +88,10 @@ def _pick_artist_alias(artist: str) -> str:
     return artist.strip()
 
 
-def _clean_title(raw: str) -> str:
-    """Convert a YouTube video title to '<Artist> - <Title>' best-effort.
+def _parse_title(raw: str) -> tuple[str, str] | None:
+    """Try to parse a YouTube video title into (artist, title).
 
-    Returns the cleaned form, or the stripped original if it can't be parsed.
-    Pure / no I/O / safe to unit-test.
+    Returns None when the title doesn't fit a known pattern.
     """
     s = raw.strip()
     # Repeatedly strip trailing noise ("... Official Music Video", "[MV]", etc.)
@@ -111,7 +110,7 @@ def _clean_title(raw: str) -> str:
             r"^(.+?)\s+['\"\u2018\u201c](.+?)['\"\u2019\u201d]\s*$", s
         )
         if not m:
-            return s
+            return None
         artist_raw, title_raw = m.group(1).strip(), m.group(2).strip()
 
     # Title: unwrap surrounding quotes if present.
@@ -121,8 +120,121 @@ def _clean_title(raw: str) -> str:
 
     artist = _pick_artist_alias(artist_raw)
     if not artist or not title_raw:
+        return None
+    return artist, title_raw
+
+
+def _clean_title(raw: str) -> str:
+    """Convert a YouTube video title to '<Artist> - <Title>' best-effort.
+
+    Returns the cleaned form, or the stripped (noise-removed) original
+    if it can't be parsed. Pure / no I/O / safe to unit-test.
+    """
+    parsed = _parse_title(raw)
+    if parsed is None:
+        # Still strip trailing noise even if we can't split artist/title.
+        s = raw.strip()
+        for _ in range(4):
+            new = _NOISE_SUFFIX_RE.sub("", s).strip().rstrip("-–— ").strip()
+            if new == s or not new:
+                break
+            s = new
         return s
-    return f"{artist} - {title_raw}"
+    return f"{parsed[0]} - {parsed[1]}"
+
+
+def _write_tags(path: Path, entry: dict) -> None:
+    """Write clean metadata + cover art to the audio file via mutagen.
+
+    Best-effort: silently skips on any error so a tag failure can't break
+    a successful download.
+    """
+    try:
+        from mutagen import File as MutagenFile
+        from mutagen.id3 import APIC, ID3, TALB, TDRC, TIT2, TPE1, TRCK
+        from mutagen.mp4 import MP4, MP4Cover
+    except ImportError:
+        return  # mutagen optional; if missing, skip tagging
+
+    raw_title = entry.get("title") or path.stem
+    parsed = _parse_title(raw_title)
+    if parsed:
+        artist, title = parsed
+    else:
+        artist = entry.get("artist") or entry.get("uploader") or ""
+        title = raw_title
+
+    # Prefer YouTube Music's structured fields when available.
+    artist = entry.get("artist") or artist
+    track = entry.get("track")
+    if track:
+        title = track
+    album = entry.get("album") or ""
+    year = ""
+    upload_date = entry.get("upload_date") or ""  # 'YYYYMMDD'
+    release_year = entry.get("release_year")
+    if release_year:
+        year = str(release_year)
+    elif upload_date and len(upload_date) >= 4:
+        year = upload_date[:4]
+    track_num = entry.get("playlist_index")
+
+    # Locate the embedded thumbnail (yt-dlp leaves it next to the file
+    # only when EmbedThumbnail is off; with EmbedThumbnail it's already
+    # inside the file, so we don't need to re-embed it).
+    suffix = path.suffix.lower()
+    try:
+        if suffix in (".m4a", ".mp4", ".m4b"):
+            audio = MP4(path)
+            tags = audio.tags if audio.tags is not None else audio.add_tags() or audio.tags
+            if title:
+                tags["\xa9nam"] = [title]
+            if artist:
+                tags["\xa9ART"] = [artist]
+            if album:
+                tags["\xa9alb"] = [album]
+            if year:
+                tags["\xa9day"] = [year]
+            if track_num:
+                tags["trkn"] = [(int(track_num), 0)]
+            # Wipe yt-dlp's noisy description/synopsis if present.
+            for k in ("desc", "\xa9cmt", "ldes"):
+                tags.pop(k, None)
+            audio.save()
+        elif suffix == ".mp3":
+            try:
+                tags = ID3(path)
+            except Exception:
+                tags = ID3()
+            if title:
+                tags.add(TIT2(encoding=3, text=title))
+            if artist:
+                tags.add(TPE1(encoding=3, text=artist))
+            if album:
+                tags.add(TALB(encoding=3, text=album))
+            if year:
+                tags.add(TDRC(encoding=3, text=year))
+            if track_num:
+                tags.add(TRCK(encoding=3, text=str(track_num)))
+            tags.save(path)
+        else:
+            # OGG / others: let mutagen pick the right format.
+            audio = MutagenFile(path, easy=True)
+            if audio is None:
+                return
+            if title:
+                audio["title"] = title
+            if artist:
+                audio["artist"] = artist
+            if album:
+                audio["album"] = album
+            if year:
+                audio["date"] = year
+            if track_num:
+                audio["tracknumber"] = str(track_num)
+            audio.save()
+    except Exception:
+        pass  # tagging is best-effort; never fail the download for it
 
 def _default_progress(d: dict) -> None:
     status = d.get("status")
@@ -153,6 +265,7 @@ def download_audio(
     progress_hook: Optional[Callable[[dict], None]] = None,
     playlist: bool = False,
     rename: bool = True,
+    tags: bool = True,
 ) -> list[Path]:
     """Download a YouTube URL as audio file(s).
 
@@ -170,6 +283,8 @@ def download_audio(
             '<Artist> - <Title>.<ext>' after download (best-effort heuristic;
             falls back to the original if parsing fails or the target name
             collides). Pass False to keep yt-dlp's filename verbatim.
+        tags: If True (default), embed metadata (title, artist, album, year)
+            and the YouTube thumbnail as cover art into the audio file.
 
     Returns:
         List of paths to the downloaded audio file(s). Single-element list
@@ -196,6 +311,21 @@ def download_audio(
     else:
         outtmpl = str(out_path / "%(title)s.%(ext)s")
 
+    postprocessors: list[dict] = [
+        {
+            "key": "FFmpegExtractAudio",
+            "preferredcodec": fmt,
+            "preferredquality": preferred_quality,
+        }
+    ]
+    if tags:
+        # Cover art from the YouTube thumbnail. Requires writethumbnail=True.
+        # We do NOT use yt-dlp's FFmpegMetadata postprocessor -- it dumps the
+        # whole video description (lyrics, promo links, hashtags) into the
+        # `description`/`synopsis` tags. We write clean tags ourselves via
+        # mutagen below using the parsed (Artist, Title).
+        postprocessors.append({"key": "EmbedThumbnail", "already_have_thumbnail": False})
+
     ydl_opts: dict = {
         "format": "bestaudio/best",
         "outtmpl": outtmpl,
@@ -204,13 +334,8 @@ def download_audio(
         "restrictfilenames": False,
         "quiet": True,
         "no_warnings": True,
-        "postprocessors": [
-            {
-                "key": "FFmpegExtractAudio",
-                "preferredcodec": fmt,
-                "preferredquality": preferred_quality,
-            }
-        ],
+        "writethumbnail": tags,
+        "postprocessors": postprocessors,
         "progress_hooks": [progress_hook or _default_progress],
     }
 
@@ -273,6 +398,8 @@ def download_audio(
                         final = target
                     except OSError:
                         pass  # keep yt-dlp name on any rename failure
+            if tags:
+                _write_tags(final, entry)
             results.append(final)
 
     if not results:

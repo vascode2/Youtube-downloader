@@ -91,6 +91,8 @@ OPTIONS
                          are renamed to '<Artist> - <Title>.<ext>' (e.g.
                          "(여자)아이들((G)I-DLE) - 'Allergy' Official
                          Music Video.m4a" -> "(G)I-DLE - Allergy.m4a").
+  --no-tags              Skip embedding metadata (title, artist, album, year)
+                         and the YouTube thumbnail as cover art into the file.
   -h, --help             Show this help and exit.
 
 NOTES
@@ -144,6 +146,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_false",
         help="Keep yt-dlp's original filename (skip the 'Artist - Title' cleanup)",
     )
+    p.add_argument(
+        "--no-tags",
+        dest="tags",
+        action="store_false",
+        help="Skip embedding metadata + cover art into the audio file",
+    )
     return p
 
 
@@ -157,6 +165,7 @@ def _download_one(url: str, args: argparse.Namespace) -> tuple[bool, list, str]:
             out_dir=args.out,
             playlist=args.playlist,
             rename=args.rename,
+            tags=args.tags,
         )
         return True, paths, ""
     except DownloaderError as e:
