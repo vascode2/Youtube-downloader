@@ -38,3 +38,10 @@ Working notes for the AI agent. Things that bit us, decisions we made, and stuff
 python -m src.cli "https://www.youtube.com/watch?v=jNQXAC9IVRw" --out "./test_out"
 ```
 Should produce `Me at the zoo.m4a` (~310 KB) in `./test_out/`. Used as smoke test.
+
+## Agent customizations (chat-only, not runtime code)
+
+- [.github/prompts/add-feature.prompt.md](.github/prompts/add-feature.prompt.md) — slash prompt: load this whenever the user asks to add a feature. Forces reading AGENTS/CLAUDE first and respects the architecture invariants.
+- [.copilot/skills/ai-postprocess/SKILL.md](.copilot/skills/ai-postprocess/SKILL.md) — auto-loaded skill for any AI-audio-processing request (vocal removal, denoise, etc.). Encodes tool choices (Demucs, Resemble Enhance) and pipeline pattern.
+
+If you're tempted to add more agents/hooks/skills: don't, unless the codebase has actually grown. The article we drew from explicitly warns "필요한 설정만 활성화" (only activate what you need) — over-customization eats context budget.

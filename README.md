@@ -40,10 +40,23 @@ src/
 requirements.txt
 ```
 
-## Roadmap
+## Roadmap / TODO
 
-- Video downloads (`--video`, mp4)
-- Device presets (`--for ios|android|windows|mac|linux`)
-- Playlist / channel batch
-- Desktop GUI (PySide6) reusing `download_audio()`
-- AI post-processing (vocal removal, noise reduction) via Demucs / UVR
+Features (implement on demand — use the `/add-feature` prompt to keep changes consistent):
+
+- [ ] **Video downloads** — `--video` flag, mp4 container, `bestvideo+bestaudio` format
+- [ ] **Quality presets** — `highest | 320 | 256 | 128 | 64` for both audio and video
+- [ ] **Device presets** — `--for ios|android|windows|mac|linux|m4a|mp3|ogg` mapping to `(fmt, quality)` pairs
+- [ ] **Playlist / channel batch** — drop `noplaylist=True`, add `--playlist` flag
+- [ ] **Desktop GUI** — PySide6 window (paste link, dropdowns, progress bar) reusing `download_audio()` on a `QThread`
+- [ ] **AI post-processing** — vocal removal, voice extraction, denoise, instrument isolation, loudness balance, audio upscale (Demucs + Resemble Enhance + pyloudnorm). See [.copilot/skills/ai-postprocess/SKILL.md](.copilot/skills/ai-postprocess/SKILL.md) for the build plan.
+- [ ] **Pip-install global command** — `pip install -e .` exposing a `ydl` console script
+
+Agent / workflow customization (inspired by [roboco.io: Everything Claude Code distilled](https://roboco.io/posts/everything-claude-code-distilled/)):
+
+- [x] **Agent instructions** — [AGENTS.md](AGENTS.md) (architecture) + [CLAUDE.md](CLAUDE.md) (gotchas, decisions)
+- [x] **Slash command** — [`.github/prompts/add-feature.prompt.md`](.github/prompts/add-feature.prompt.md) for safe feature additions
+- [x] **Skill** — [`.copilot/skills/ai-postprocess/SKILL.md`](.copilot/skills/ai-postprocess/SKILL.md) for the AI processing roadmap item
+- [ ] **Subagents** — defer until the codebase grows (current scope too small to benefit from a `code-reviewer` / `tdd-guide` split)
+- [ ] **Hooks** — defer until there's a real footgun to guard (e.g., pre-commit hook to block accidental `test_out/` commits — currently handled by `.gitignore`)
+- [ ] **Tests** — add `pytest` smoke test that mocks yt-dlp; only after a second feature lands
