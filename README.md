@@ -192,6 +192,8 @@ What the window gives you:
   - File contains YouTube URLs → batch-download mode.
   - File contains plain song names → search-and-download mode (writes
     `<input>.urls.txt` next to it, same as `--search --download`).
+  - **Mixed file** (some lines with URLs, some without) → batch mode;
+    name-only lines are auto-resolved via search and added to the queue.
 - Live progress bar per file, `i/N` counter for batches, scrolling log.
 - **Cancel** button stops between files (and aborts the in-flight download).
 
