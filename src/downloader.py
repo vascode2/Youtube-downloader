@@ -389,11 +389,29 @@ def download_audio(
         "progress_hooks": [progress_hook or _default_progress],
     }
 
-    try:
-        with YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-    except DownloadError as e:
-        raise DownloaderError(f"Download failed: {e}") from e
+    # Retry on transient PermissionError: Windows Defender / Explorer indexer
+    # often briefly locks the freshly written audio file just as yt-dlp's
+    # EmbedThumbnail postprocessor tries to atomically rename it into place.
+    # 3 tries with backoff (~0.5s, ~2s) covers virtually every real case.
+    import time
+
+    info = None
+    for attempt in range(3):
+        try:
+            with YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=True)
+            break
+        except DownloadError as e:
+            raise DownloaderError(f"Download failed: {e}") from e
+        except PermissionError as e:
+            if attempt == 2:
+                raise DownloaderError(
+                    f"A Windows process kept the file locked across 3 retries: "
+                    f"{e}. Likely cause: antivirus / indexer / cloud-sync agent "
+                    f"watching {out_path}. Try a different output folder, or "
+                    f"add this folder to your antivirus exclusions."
+                ) from e
+            time.sleep(0.5 * (attempt + 1) ** 2)  # 0.5s, 2.0s
 
     # Detect: playlist was requested but yt-dlp couldn't enumerate it
     # (private playlist, unlisted with no auth, etc.) and fell back to a single
