@@ -50,7 +50,7 @@ The installer also sets your user-scope execution policy to `RemoteSigned` (Micr
 
 | Flag | Choices | Default |
 |------|---------|---------|
-| `--quality` | `64`, `128`, `256`, `320`, `highest` | `128` |
+| `--quality` | `64`, `128`, `192`, `256`, `320`, `highest` | `128` |
 | `--format` | `m4a`, `mp3`, `ogg` | `m4a` |
 | `--out` | any folder path | `C:/Users/Yoon/Music/0_temp` |
 

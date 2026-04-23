@@ -29,7 +29,7 @@ OPTIONS
   url                    The YouTube video URL. Can be a full watch URL,
                          a youtu.be short link, or a URL with extra params
                          (?list=..., &t=...). Quote it to avoid shell issues.
-  --quality {{64,128,256,320,highest}}
+  --quality {{64,128,192,256,320,highest}}
                          Target audio bitrate in kbps. 'highest' keeps the
                          best stream YouTube offers (no re-encoding).
                          Default: 128 (good size/quality balance for music).
@@ -60,7 +60,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--quality",
         default="128",
-        choices=["64", "128", "256", "320", "highest"],
+        choices=["64", "128", "192", "256", "320", "highest"],
         help="Audio bitrate in kbps (default: 128)",
     )
     p.add_argument(
