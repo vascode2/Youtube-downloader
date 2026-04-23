@@ -17,6 +17,18 @@ from yt_dlp.utils import DownloadError
 
 DEFAULT_OUT_DIR = r"C:/Users/Yoon/Music/0_temp"
 
+# Characters Windows forbids in filenames.
+_FORBIDDEN = '<>:"/\\|?*'
+
+
+def _safe_filename(name: str) -> str:
+    """Replace forbidden Windows filename characters with similar-looking ones."""
+    table = str.maketrans({
+        "<": "‹", ">": "›", ":": "꞉", '"': "ʺ",
+        "/": "⁄", "\\": "⧹", "|": "ǀ", "?": "？", "*": "＊",
+    })
+    return name.translate(table)
+
 
 class DownloaderError(Exception):
     """User-facing error from the downloader."""
@@ -79,7 +91,13 @@ def download_audio(
     preferred_quality = "0" if quality == "highest" else str(quality)
 
     if playlist:
-        outtmpl = str(out_path / "%(playlist_title)s" / "%(playlist_index)03d - %(title)s.%(ext)s")
+        # `(playlist_title|...)s` is yt-dlp's fallback syntax — used if the
+        # playlist title can't be fetched (e.g. private playlist).
+        outtmpl = str(
+            out_path
+            / "%(playlist_title,playlist|_no_playlist)s"
+            / "%(playlist_index)03d - %(title)s.%(ext)s"
+        )
     else:
         outtmpl = str(out_path / "%(title)s.%(ext)s")
 
@@ -107,6 +125,16 @@ def download_audio(
     except DownloadError as e:
         raise DownloaderError(f"Download failed: {e}") from e
 
+    # Detect: playlist was requested but yt-dlp couldn't enumerate it
+    # (private playlist, unlisted with no auth, etc.) and fell back to a single
+    # video download. In that case the file landed in `_no_playlist/NA - ....`
+    # — move it back up to `out_path` and warn.
+    playlist_inaccessible = (
+        playlist
+        and info is not None
+        and "entries" not in info  # not actually treated as a playlist by yt-dlp
+    )
+
     # Collect entries (playlist) or wrap single video info as a one-item list.
     entries = info.get("entries") if info and "entries" in info else [info]
     entries = [e for e in entries if e]  # drop None from skipped/private videos
@@ -121,6 +149,21 @@ def download_audio(
             matches = list(final.parent.glob(f"*.{fmt}"))
             if matches:
                 final = max(matches, key=lambda p: p.stat().st_mtime)
+
+        if playlist_inaccessible and final.exists():
+            # Strip the "NA - " (or "001 - ") index prefix and move out of the
+            # `_no_playlist` sub-folder so the result is just `<title>.<ext>`.
+            clean_name = entry.get("title", final.stem) + f".{fmt}"
+            target = out_path / _safe_filename(clean_name)
+            try:
+                final.replace(target)
+                # Remove the now-empty fallback folder.
+                if final.parent.exists() and not any(final.parent.iterdir()):
+                    final.parent.rmdir()
+                final = target
+            except OSError:
+                pass  # if move fails, just keep the file where it is
+
         if final.exists():
             results.append(final)
 
@@ -128,4 +171,14 @@ def download_audio(
         raise DownloaderError(
             f"Download finished but no output files found in {out_path}"
         )
+
+    if playlist_inaccessible:
+        print(
+            "\nNote: --playlist was given but the playlist could not be "
+            "enumerated (likely private). Downloaded only the single ?v= "
+            "video. To fix: set the playlist visibility to Unlisted or Public "
+            "on YouTube.",
+            file=sys.stderr,
+        )
+
     return results
