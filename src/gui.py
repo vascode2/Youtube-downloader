@@ -341,33 +341,30 @@ class MainWindow(QWidget):
 
     @Slot(Path)
     def _on_file_dropped(self, path: Path) -> None:
-        # Classify: if the file contains any YouTube URL, treat as batch;
-        # otherwise treat as search-and-download.
+        # Classify: a file with ANY YouTube URL is treated as a batch file.
+        # Lines without URLs in that file are auto-resolved via search at
+        # download time. A file with only name lines (no URLs) is
+        # search-and-download mode.
         try:
-            urls = parse_batch_file(path)
+            urls, queries = parse_mixed_file(path)
         except DownloaderError as e:
             self._append_log(f"Cannot read {path}: {e}")
             return
         if urls:
             self._pending_file = path
             self._pending_mode = "batch"
-            self._append_log(f"Loaded batch file: {path}  ({len(urls)} URL(s))")
-            self.go_btn.setText(f"Download batch ({len(urls)})")
-        else:
-            try:
-                queries = parse_song_file(path)
-            except DownloaderError as e:
-                self._append_log(f"Cannot read {path}: {e}")
-                return
-            if not queries:
-                self._append_log(f"{path}: no URLs and no song names found.")
-                return
+            extra = f" + {len(queries)} name(s) to resolve" if queries else ""
+            self._append_log(f"Loaded batch file: {path}  ({len(urls)} URL(s){extra})")
+            self.go_btn.setText(f"Download batch ({len(urls) + len(queries)})")
+        elif queries:
             self._pending_file = path
             self._pending_mode = "search"
             self._append_log(
                 f"Loaded song-names file: {path}  ({len(queries)} name(s)) — will search + download"
             )
             self.go_btn.setText(f"Search + download ({len(queries)})")
+        else:
+            self._append_log(f"{path}: no URLs and no song names found.")
 
     @Slot()
     def _on_go(self) -> None:
@@ -393,10 +390,12 @@ class MainWindow(QWidget):
                     QMessageBox.warning(self, "Error", str(e))
                     return
                 # Name-only lines in a batch file get resolved alongside the
-                # explicit URLs, same as CLI batch mode.
+                # explicit URLs, same as CLI batch mode. We do NOT pass
+                # search_input here -- writing a sibling .urls.txt is only
+                # the right behavior in pure search mode, not when resolution
+                # is a side effect of a mostly-URL batch.
                 if extra_queries:
                     search_queries = extra_queries
-                    search_input = self._pending_file
             else:  # "search"
                 try:
                     search_queries = parse_song_file(self._pending_file)
