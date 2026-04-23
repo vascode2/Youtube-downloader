@@ -10,6 +10,29 @@
 $ErrorActionPreference = "Stop"
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $python = "C:/Users/Yoon/AppData/Local/Microsoft/WindowsApps/python3.12.exe"
+$origCwd = (Get-Location).ProviderPath
+
+# Resolve relative paths in --batch / --out against the user's CWD,
+# because we Push-Location to $scriptDir before invoking python.
+function Resolve-PathArgs {
+    param([string[]]$InArgs)
+    $out = New-Object System.Collections.Generic.List[string]
+    for ($i = 0; $i -lt $InArgs.Count; $i++) {
+        $a = $InArgs[$i]
+        $out.Add($a)
+        if (($a -eq "--batch" -or $a -eq "--out") -and ($i + 1) -lt $InArgs.Count) {
+            $val = $InArgs[$i + 1]
+            if (-not [System.IO.Path]::IsPathRooted($val)) {
+                $val = [System.IO.Path]::GetFullPath((Join-Path $origCwd $val))
+            }
+            $out.Add($val)
+            $i++
+        }
+    }
+    return ,$out.ToArray()
+}
+
+$args = Resolve-PathArgs -InArgs $args
 
 # If first arg looks like a flag (or no args), pull URL from clipboard.
 if ($args.Count -eq 0 -or $args[0].StartsWith("--")) {
