@@ -53,6 +53,20 @@ The installer also sets your user-scope execution policy to `RemoteSigned` (Micr
 | `--quality` | `64`, `128`, `192`, `256`, `320`, `highest` | `128` |
 | `--format` | `m4a`, `mp3`, `ogg` | `m4a` |
 | `--out` | any folder path | `C:/Users/Yoon/Music/0_temp` |
+| `--playlist` | (flag, no value) | off — downloads only the single `?v=` video |
+
+### Playlist downloads
+
+If the URL contains `&list=...` (or is a `playlist?list=...` URL), pass `--playlist` to download every video as its own audio file. Files land in a sub-folder named after the playlist, prefixed with track number:
+
+```powershell
+ydl "https://www.youtube.com/playlist?list=PLxxxxxxx" --playlist
+# -> C:/Users/Yoon/Music/0_temp/<Playlist Title>/001 - <Track 1>.m4a
+#    C:/Users/Yoon/Music/0_temp/<Playlist Title>/002 - <Track 2>.m4a
+#    ...
+```
+
+Without `--playlist`, even a URL like `?v=ID&list=...` only downloads the single `?v=` video (this is the safer default — one click != accidentally downloading a 200-track playlist).
 
 ## Project layout
 
@@ -70,7 +84,7 @@ Features (implement on demand — use the `/add-feature` prompt to keep changes 
 - [ ] **Video downloads** — `--video` flag, mp4 container, `bestvideo+bestaudio` format
 - [ ] **Quality presets** — `highest | 320 | 256 | 128 | 64` for both audio and video
 - [ ] **Device presets** — `--for ios|android|windows|mac|linux|m4a|mp3|ogg` mapping to `(fmt, quality)` pairs
-- [ ] **Playlist / channel batch** — drop `noplaylist=True`, add `--playlist` flag
+- [ ] **Playlist / channel batch** — ~~drop `noplaylist=True`, add `--playlist` flag~~ ✅ done
 - [ ] **Desktop GUI** — PySide6 window (paste link, dropdowns, progress bar) reusing `download_audio()` on a `QThread`
 - [ ] **AI post-processing** — vocal removal, voice extraction, denoise, instrument isolation, loudness balance, audio upscale (Demucs + Resemble Enhance + pyloudnorm). See [.copilot/skills/ai-postprocess/SKILL.md](.copilot/skills/ai-postprocess/SKILL.md) for the build plan.
 - [ ] **Pip-install global command** — `pip install -e .` exposing a `ydl` console script
