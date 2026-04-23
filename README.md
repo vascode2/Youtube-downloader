@@ -25,9 +25,16 @@ python -m src.cli "https://www.youtube.com/watch?v=VIDEO_ID" --quality 320 --for
 
 ### Quick mode (recommended) — `ydl`
 
-For everyday use, `ydl.bat` is a one-shot wrapper:
+**One-time install** (registers `ydl` as a PowerShell function in your `$PROFILE`):
 
 ```powershell
+.\Install.bat
+```
+
+Then open a **new** PowerShell window and use it from anywhere:
+
+```powershell
+ydl --help                                       # show full help with examples
 ydl "https://www.youtube.com/watch?v=VIDEO_ID"   # explicit URL
 ydl                                              # downloads URL from clipboard
 ydl --quality 320 --format mp3                   # clipboard URL + overrides
@@ -35,19 +42,9 @@ ydl --quality 320 --format mp3                   # clipboard URL + overrides
 
 **Fastest workflow**: copy the YouTube URL in your browser → run `ydl` → done.
 
-To make `ydl` work from any directory, add the project folder to your `PATH`:
+**Why a function and not just a `.bat`?** PowerShell 5.1 mangles `&` in quoted args when launching `.bat` files — a YouTube URL with `&list=...` would leak to cmd.exe and produce errors. The function call stays in-process and handles it cleanly.
 
-```powershell
-# One-time setup (current user)
-[Environment]::SetEnvironmentVariable(
-    "PATH",
-    [Environment]::GetEnvironmentVariable("PATH", "User") + ";G:\My Drive\Projects\Youtube-downloader",
-    "User"
-)
-# Restart your terminal afterwards.
-```
-
-Or pin `ydl.bat` to your taskbar / make a desktop shortcut for one-click clipboard downloads.
+The installer also sets your user-scope execution policy to `RemoteSigned` (Microsoft's recommended setting; allows local scripts, requires signed scripts from internet). If you'd rather keep the policy stricter, you can still invoke `ydl.bat` directly — it works for URLs without `&`.
 
 ### Options
 

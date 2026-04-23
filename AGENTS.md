@@ -21,11 +21,13 @@ Minimal Python CLI wrapping `yt-dlp` + `ffmpeg` to download YouTube audio. v1 sc
 pip install -r requirements.txt
 python -m src.cli "<youtube-url>"                                  # default: 128k m4a
 python -m src.cli "<url>" --quality 320 --format mp3 --out "D:/x"  # overrides
-.\ydl.bat                                                          # quick mode: URL from clipboard
-.\ydl.bat "<url>"                                                  # quick mode: explicit URL
+.\Install.bat                                                      # one-time: register `ydl` PowerShell function
+ydl                                                                # quick mode: URL from clipboard
+ydl "<url>"                                                        # quick mode: explicit URL
+ydl --help                                                         # full help with examples
 ```
 
-`ydl.bat` → `_ydl.ps1` is a thin convenience wrapper. The `.bat` is the canonical entry point because it sets `-ExecutionPolicy Bypass` (Windows blocks direct `.ps1` execution by default). The `.ps1` is named `_ydl.ps1` (underscore prefix) so PowerShell does NOT resolve the bare name `ydl` to it — otherwise PowerShell prefers `.ps1` over `.bat` in PATH and users hit `UnauthorizedAccess`. Do not invoke `.ps1` directly in docs/examples.
+`ydl` is registered as a **PowerShell function** in the user's `$PROFILE` (via `Install.bat` → `Install.ps1`), which calls `_ydl.ps1`. The function approach (vs a `.bat` in PATH) keeps the call in-process and avoids PowerShell 5.1's bug where `&` in quoted args leaks to cmd.exe. `ydl.bat` is kept as a fallback for cmd.exe / File Explorer shortcuts. The `.ps1` is named `_ydl.ps1` (underscore prefix) so PowerShell does NOT resolve the bare name `ydl` to it directly — only the function (or the `.bat`) matches.
 
 No automated tests yet. Smoke-test with the 19-second public-domain video `https://www.youtube.com/watch?v=jNQXAC9IVRw` ("Me at the zoo") into `./test_out` (gitignored).
 

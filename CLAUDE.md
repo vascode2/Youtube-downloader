@@ -11,6 +11,8 @@ Working notes for the AI agent. Things that bit us, decisions we made, and stuff
 - **Direct `.ps1` execution is blocked** by default execution policy. Always go through `ydl.bat` (which passes `-ExecutionPolicy Bypass`). Don't tell users to run `.\_ydl.ps1` — they'll hit `UnauthorizedAccess`.
 - **PowerShell prefers `.ps1` over `.bat`** when both share a stem in PATH. That's why the script is named `_ydl.ps1` (underscore prefix) and only the `.bat` is named `ydl` — so `ydl` from PowerShell resolves to the bypass-wrapper, not the blocked script.
 - **PowerShell range gotcha**: `$args[1..0]` does NOT return empty when `$args.Count -eq 1`; it returns `@($args[1], $args[0])` (ranges are bidirectional). Always guard with `if ($args.Count -gt 1)` before slicing.
+- **`&` in URLs leaks to cmd.exe** when invoking `.bat` shims from PowerShell 5.1 — the download succeeds (because yt-dlp resolves `?v=ID` alone) but the trailing `&list=...` runs as cmd commands. Fix is to register `ydl` as a PowerShell **function** (`Install.bat` does this), which keeps the call in-process. Don't try to fix this with quoting tricks in the .bat — it's a known PS5.1 native-command-passing bug.
+- **Profile won't load until execution policy allows it.** `Install.ps1` runs `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` to fix this. Don't recommend Bypass scope (lasts only for that process); use CurrentUser RemoteSigned (Microsoft's standard).
 
 ## Design decisions (do not relitigate without asking)
 
