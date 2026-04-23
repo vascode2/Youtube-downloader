@@ -257,6 +257,52 @@ def _ensure_ffmpeg() -> None:
         )
 
 
+# File extensions that are sidecars of an audio download (source streams,
+# standalone thumbnails, partial downloads). Anything matching the SAME pre-
+# rename stem with one of these extensions is deleted after the download.
+_SIDECAR_EXTS = frozenset({
+    ".webm", ".webp", ".jpg", ".jpeg", ".png", ".opus",
+    ".mp4", ".mkv", ".m4a", ".mp3", ".ogg", ".part",
+})
+
+
+def _sweep_sidecars(pre: Path, keep: Path) -> None:
+    """Delete leftover source-stream / thumbnail files matching `pre.stem`.
+
+    Runs with a short retry loop because Windows often holds files briefly
+    (antivirus, Explorer indexer, cloud-sync). `keep` is the file we want to
+    preserve -- usually the converted audio.
+    """
+    import time
+
+    keep_resolved: Path | None
+    try:
+        keep_resolved = keep.resolve()
+    except OSError:
+        keep_resolved = keep
+
+    for sib in pre.parent.glob(pre.stem + ".*"):
+        if sib.suffix.lower() not in _SIDECAR_EXTS:
+            continue
+        try:
+            if sib.resolve() == keep_resolved:
+                continue
+        except OSError:
+            if sib == keep:
+                continue
+        # Retry briefly: Windows may need a tick after ffmpeg releases the file.
+        for attempt in range(4):
+            try:
+                sib.unlink()
+                break
+            except FileNotFoundError:
+                break
+            except OSError:
+                if attempt == 3:
+                    break
+                time.sleep(0.15)
+
+
 def download_audio(
     url: str,
     quality: str = "192",
@@ -388,36 +434,44 @@ def download_audio(
             except OSError:
                 pass  # if move fails, just keep the file where it is
 
-        if final.exists():
-            # Defensive cleanup: yt-dlp occasionally leaves the source stream
-            # (.webm/.opus/etc.) and/or the standalone thumbnail (.webp/.jpg)
-            # next to the converted file -- e.g. if EmbedThumbnail couldn't
-            # handle the thumbnail format, or if a postprocessor errored mid-
-            # chain. Delete any sibling with the SAME pre-rename stem and a
-            # known sidecar extension.
-            _sidecar_exts = {".webm", ".webp", ".jpg", ".jpeg", ".png", ".opus",
-                             ".mp4", ".mkv", ".m4a", ".mp3", ".ogg", ".part"}
-            for sib in pre.parent.glob(pre.stem + ".*"):
-                if sib == final:
-                    continue
-                if sib.suffix.lower() in _sidecar_exts:
-                    try:
-                        sib.unlink()
-                    except OSError:
-                        pass
+        if not final.exists():
+            continue
 
+        # All post-download steps below are best-effort: each is wrapped so a
+        # tag/rename/cleanup failure on one entry can't fail the whole batch
+        # or leave sidecar files behind.
+        try:
             if rename:
-                cleaned = _clean_title(entry.get("title", final.stem))
-                target = final.with_name(_safe_filename(cleaned) + final.suffix)
-                if target != final and not target.exists():
-                    try:
-                        final.replace(target)
-                        final = target
-                    except OSError:
-                        pass  # keep yt-dlp name on any rename failure
-            if tags:
+                raw_title = entry.get("title", final.stem)
+                # Collapse whitespace so trailing/double spaces don't cause a
+                # spurious rename on Windows (which silently strips trailing
+                # spaces from filenames -> 'X.m4a ' and 'X.m4a' resolve to the
+                # same file and Path.replace fails with "in use").
+                cleaned = " ".join(_clean_title(raw_title).split())
+                safe_stem = _safe_filename(cleaned)
+                if safe_stem and safe_stem != final.stem:
+                    target = final.with_name(safe_stem + final.suffix)
+                    if not target.exists():
+                        try:
+                            final.replace(target)
+                            final = target
+                        except OSError:
+                            pass  # keep yt-dlp name on any rename failure
+        except Exception:
+            pass
+
+        if tags:
+            try:
                 _write_tags(final, entry)
-            results.append(final)
+            except Exception:
+                pass  # _write_tags already swallows; double-belt for safety
+
+        # Sidecar cleanup runs LAST and ALWAYS, with a brief retry: Windows
+        # often holds the source/thumbnail file open for a tick after ffmpeg
+        # exits (antivirus, Explorer indexer, cloud-sync agent on Music/...).
+        _sweep_sidecars(pre, final)
+
+        results.append(final)
 
     if not results:
         raise DownloaderError(
