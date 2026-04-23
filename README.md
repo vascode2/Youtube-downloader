@@ -108,7 +108,17 @@ ydl --batch songs.txt                  # default 192k m4a
 ydl --batch songs.txt --quality 192    # any other flag applies to all
 ```
 
-**File format** — one URL per line, free-form lines OK. Anything containing a YouTube URL is picked up; titles, dashes, blank lines, and lines starting with `#` are ignored. Your own list works as-is:
+**File format** — one URL per line, free-form lines OK. Anything containing a YouTube URL is picked up; titles, dashes, blank lines, and lines starting with `#` are ignored.
+
+**Mixed files are fine too** — lines *without* a URL are treated as song names and resolved automatically via YouTube search before downloading. So this works as one batch:
+
+```
+OMG (NewJeans) - https://www.youtube.com/watch?v=sVTy_wmn5SU
+Ditto (NewJeans) - https://www.youtube.com/watch?v=pSUydWEqKwE
+Hype Boy (NewJeans) -
+```
+
+Your own list works as-is:
 
 ```
 # K-Pop Collection

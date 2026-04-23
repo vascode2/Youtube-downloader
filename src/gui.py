@@ -32,7 +32,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from .cli import parse_batch_file, parse_song_file, resolve_songs
+from .cli import parse_batch_file, parse_mixed_file, parse_song_file, resolve_songs
 from .downloader import DEFAULT_OUT_DIR, DownloaderError, download_audio
 
 
@@ -388,10 +388,15 @@ class MainWindow(QWidget):
         if self._pending_file is not None:
             if self._pending_mode == "batch":
                 try:
-                    urls = parse_batch_file(self._pending_file)
+                    urls, extra_queries = parse_mixed_file(self._pending_file)
                 except DownloaderError as e:
                     QMessageBox.warning(self, "Error", str(e))
                     return
+                # Name-only lines in a batch file get resolved alongside the
+                # explicit URLs, same as CLI batch mode.
+                if extra_queries:
+                    search_queries = extra_queries
+                    search_input = self._pending_file
             else:  # "search"
                 try:
                     search_queries = parse_song_file(self._pending_file)

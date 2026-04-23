@@ -24,9 +24,23 @@ def parse_batch_file(path: Path) -> list[str]:
     - Blank lines, lines starting with `#`, and lines without a URL are skipped.
     - Order is preserved; duplicates are kept.
     """
+    urls, _ = parse_mixed_file(path)
+    return urls
+
+
+def parse_mixed_file(path: Path) -> tuple[list[str], list[str]]:
+    """Parse a free-form text file into (urls, name_queries).
+
+    Lines are scanned in order. A line containing a YouTube URL contributes
+    the URL to `urls`. A line WITHOUT a URL (and not blank / not a `#`
+    comment) is treated as a song-name query and added to `name_queries` --
+    after stripping a trailing ' - ' (so 'Hype Boy (NewJeans) - ' becomes
+    'Hype Boy (NewJeans)').
+    """
     if not path.exists():
         raise DownloaderError(f"Batch file not found: {path}")
     urls: list[str] = []
+    queries: list[str] = []
     for raw in path.read_text(encoding="utf-8").splitlines():
         line = raw.strip()
         if not line or line.startswith("#"):
@@ -34,7 +48,13 @@ def parse_batch_file(path: Path) -> list[str]:
         m = _URL_RE.search(line)
         if m:
             urls.append(m.group(0).rstrip(".,);]"))
-    return urls
+        else:
+            # Strip trailing dashes/whitespace left over from a missing URL,
+            # e.g. 'Hype Boy (NewJeans) - '  ->  'Hype Boy (NewJeans)'.
+            cleaned = re.sub(r"\s*[-\u2013\u2014]+\s*$", "", line).strip()
+            if cleaned:
+                queries.append(cleaned)
+    return urls, queries
 
 
 def parse_song_file(path: Path) -> list[str]:
@@ -334,16 +354,28 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  -> {args.fmt} @ {args.quality}kbps into {args.out}")
     elif args.batch:
         try:
-            urls = parse_batch_file(Path(args.batch))
+            urls, name_queries = parse_mixed_file(Path(args.batch))
         except DownloaderError as e:
             print(f"Error: {e}", file=sys.stderr)
             return 1
-        if not urls:
-            print(f"Error: no URLs found in {args.batch}", file=sys.stderr)
+        if not urls and not name_queries:
+            print(f"Error: no URLs or song names found in {args.batch}", file=sys.stderr)
             return 1
+        # Resolve any name-only lines to URLs via YouTube search.
+        if name_queries:
+            print(f"Batch mode: {len(urls)} URL(s) + {len(name_queries)} name(s) without URL from {args.batch}")
+            print(f"Resolving {len(name_queries)} song name(s) via YouTube search...")
+            results = resolve_songs(name_queries)
+            for query, vid, yt_title in results:
+                if vid:
+                    urls.append(f"https://www.youtube.com/watch?v={vid}")
+                    print(f"  OK    {query[:40]:40s} -> {(yt_title or '')[:50]}")
+                else:
+                    print(f"  FAIL  {query} (skipped)", file=sys.stderr)
+        else:
+            print(f"Batch mode: {len(urls)} URL(s) from {args.batch}")
         if args.url:
             urls.insert(0, args.url)  # allow mixing positional + batch
-        print(f"Batch mode: {len(urls)} URL(s) from {args.batch}")
         print(f"  -> {args.fmt} @ {args.quality}kbps into {args.out}")
     else:
         if not args.url:
