@@ -116,6 +116,11 @@ EXAMPLES
       ydl --batch names.urls.txt          # download all as audio, or
       # open the printed watch_videos URL and click Save -> Create playlist
 
+  End-to-end pipeline (names -> resolve -> playlist URL written to file ->
+  download all as audio) in one command:
+      ydl --search names.txt --download
+      ydl --search names.txt --download --quality 320 --out "D:/music"
+
 OPTIONS
   url                    The YouTube video URL. Can be a full watch URL,
                          a youtu.be short link, or a URL with extra params
@@ -145,9 +150,14 @@ OPTIONS
   --search FILE          Resolve song NAMES (not URLs) in FILE to YouTube URLs
                          using yt-dlp's search. One song per line, free-form
                          ("Dynamite - BTS", "BTS Dynamite", etc.). Writes the
-                         resolved URLs to '<input>.urls.txt' and prints a
-                         YouTube playlist URL containing all matches (max 50,
-                         YouTube limit). Does NOT download.
+                         resolved URLs to '<input>.urls.txt' (with the
+                         playlist URL embedded as a comment header) and
+                         prints a YouTube playlist URL containing all matches
+                         (max 50, YouTube limit). Does NOT download unless
+                         --download is also passed.
+  --download             With --search: also download every resolved URL as
+                         audio. Lets you go from a list of song names to a
+                         folder of audio files in one command.
   --no-rename            Keep yt-dlp's original filename. By default, files
                          are renamed to '<Artist> - <Title>.<ext>' (e.g.
                          "(여자)아이들((G)I-DLE) - 'Allergy' Official
@@ -207,6 +217,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Resolve song NAMES (not URLs) in FILE to YouTube URLs (no download)",
     )
     p.add_argument(
+        "--download",
+        action="store_true",
+        help="With --search: also download every resolved URL as audio (full pipeline in one command)",
+    )
+    p.add_argument(
         "--no-rename",
         dest="rename",
         action="store_false",
@@ -240,62 +255,84 @@ def _download_one(url: str, args: argparse.Namespace) -> tuple[bool, list, str]:
         return False, [], f"{type(e).__name__}: {e}"
 
 
-def _run_search(in_path: Path) -> int:
-    """Resolve song names to YouTube URLs; write `<input>.urls.txt`; print playlist URL."""
+def _run_search(in_path: Path) -> tuple[int, Path | None, list[str]]:
+    """Resolve song names to YouTube URLs; write `<input>.urls.txt`; print playlist URL.
+
+    Returns (exit_code, urls_file_path, resolved_urls). The path/url list are
+    None/empty on total failure so the caller can decide whether to chain a
+    download step.
+    """
     try:
         queries = parse_song_file(in_path)
     except DownloaderError as e:
         print(f"Error: {e}", file=sys.stderr)
-        return 1
+        return 1, None, []
     if not queries:
         print(f"Error: no song names found in {in_path}", file=sys.stderr)
-        return 1
+        return 1, None, []
 
     print(f"Resolving {len(queries)} song(s) via YouTube search...")
     results = resolve_songs(queries)
 
-    out_lines: list[str] = [f"# Resolved from {in_path.name}"]
+    resolved_urls: list[str] = []
     ids: list[str] = []
     failures: list[str] = []
+    body_lines: list[str] = []
     for query, vid, yt_title in results:
         if vid:
             url = f"https://www.youtube.com/watch?v={vid}"
-            out_lines.append(f"{query} - {url}")
+            body_lines.append(f"{query} - {url}")
             ids.append(vid)
+            resolved_urls.append(url)
             print(f"  OK    {query[:40]:40s} -> {(yt_title or '')[:50]}")
         else:
-            out_lines.append(f"# FAILED: {query}")
+            body_lines.append(f"# FAILED: {query}")
             failures.append(query)
 
-    out_path = in_path.with_suffix(in_path.suffix + ".urls.txt") if in_path.suffix else in_path.with_name(in_path.name + ".urls.txt")
-    # Cleaner: 'songs.txt' -> 'songs.urls.txt'
-    if in_path.suffix == ".txt":
-        out_path = in_path.with_name(in_path.stem + ".urls.txt")
-    out_path.write_text("\n".join(out_lines) + "\n", encoding="utf-8")
-
-    print(f"\nWrote {len(ids)} URL(s) to {out_path}" + (f"  ({len(failures)} failed)" if failures else ""))
-    print(f"Next: ydl --batch \"{out_path}\"")
-
+    # Header with metadata + playlist URL (so the file is self-contained).
+    header: list[str] = [f"# Resolved from {in_path.name}"]
+    playlist_url: str | None = None
     if ids:
-        # YouTube's anonymous-playlist endpoint accepts up to 50 ids.
         capped = ids[:50]
         playlist_url = "https://www.youtube.com/watch_videos?video_ids=" + ",".join(capped)
+        cap_note = "" if len(ids) <= 50 else f"  (capped to first 50 of {len(ids)})"
+        header.append(f"# Playlist URL{cap_note}: {playlist_url}")
+
+    if in_path.suffix == ".txt":
+        out_path = in_path.with_name(in_path.stem + ".urls.txt")
+    elif in_path.suffix:
+        out_path = in_path.with_suffix(in_path.suffix + ".urls.txt")
+    else:
+        out_path = in_path.with_name(in_path.name + ".urls.txt")
+    out_path.write_text("\n".join(header + body_lines) + "\n", encoding="utf-8")
+
+    print(f"\nWrote {len(ids)} URL(s) to {out_path}" + (f"  ({len(failures)} failed)" if failures else ""))
+
+    if playlist_url:
         extra = "" if len(ids) <= 50 else f"  (capped to first 50 of {len(ids)})"
         print(f"\nYouTube playlist URL{extra}:")
         print(f"  {playlist_url}")
         print("  Open it, then click Save -> + Create new playlist to save into your account.")
 
-    return 0 if not failures else 1
+    exit_code = 0 if not failures else 1
+    return exit_code, out_path, resolved_urls
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
 
     if args.search:
-        return _run_search(Path(args.search))
-
-    # Determine the URL list.
-    if args.batch:
+        search_rc, _urls_path, resolved = _run_search(Path(args.search))
+        if not args.download:
+            return search_rc
+        if not resolved:
+            print("\nNothing to download.", file=sys.stderr)
+            return search_rc or 1
+        # Fall through into the batch download loop with the resolved URLs.
+        urls = resolved
+        print(f"\n--download: starting batch of {len(urls)} resolved URL(s)")
+        print(f"  -> {args.fmt} @ {args.quality}kbps into {args.out}")
+    elif args.batch:
         try:
             urls = parse_batch_file(Path(args.batch))
         except DownloaderError as e:
@@ -318,7 +355,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  -> {args.fmt} @ {args.quality}kbps ({mode}) into {args.out}")
 
     # Single-URL fast path keeps the original output format.
-    if len(urls) == 1 and not args.batch:
+    if len(urls) == 1 and not args.batch and not args.search:
         ok, paths, err = _download_one(urls[0], args)
         if not ok:
             print(f"\nError: {err}", file=sys.stderr)

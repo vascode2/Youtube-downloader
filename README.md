@@ -56,6 +56,7 @@ The installer also sets your user-scope execution policy to `RemoteSigned` (Micr
 | `--playlist` | (flag, no value) | off — downloads only the single `?v=` video |
 | `--batch FILE` | path to text file | off |
 | `--search FILE` | path to text file (song names) | off |
+| `--download` | (flag, no value) | off — with `--search`, also downloads every resolved URL |
 | `--no-rename` | (flag, no value) | off — default cleans titles to `<Artist> - <Title>` |
 | `--no-tags` | (flag, no value) | off — default embeds Title/Artist/Year + cover art |
 
@@ -137,7 +138,17 @@ For each line in `names.txt`, this asks YouTube's search for the top result. Lin
    ```powershell
    ydl --batch names.urls.txt
    ```
+   The file's first lines are comments showing where it came from and the
+   YouTube playlist URL — so the file is self-contained.
 2. **A YouTube playlist URL** printed to the terminal — open it in your browser; YouTube will start playing the first video and show a *Save* button. Click *Save* → *+ Create new playlist* to save the list into your account.
+
+**One-shot end-to-end** — pass `--download` to do everything in a single command (resolve names → write `.urls.txt` with playlist URL inside → download every track as audio):
+
+```powershell
+ydl --search names.txt --download                     # full pipeline, defaults
+ydl --search names.txt --download --quality 320       # any download flag works
+ydl --search names.txt --download --out "D:/music"
+```
 
 ```
 Resolving 3 song(s) via YouTube search...
