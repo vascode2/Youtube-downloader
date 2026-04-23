@@ -163,12 +163,38 @@ YouTube playlist URL:
 - YouTube's `watch_videos` endpoint accepts at most **50 IDs** per playlist URL; longer lists are truncated (the `.urls.txt` keeps everything).
 - Best-effort search; spot-check the picks before saving the playlist (an obscure song name may match a cover or live clip)
 
+## Desktop GUI (`ydlg`)
+
+A single-window PySide6 app that wraps every CLI flag with controls. Same
+core (`download_audio()`), same defaults, same output format — just clickable.
+
+```powershell
+python -m src.gui      # from a terminal
+.\ydlg.bat             # double-click; no console window stays open
+```
+
+What the window gives you:
+
+- URL field with a **Paste** button (one click pulls from clipboard).
+- Quality / Format dropdowns and **Out** folder picker.
+- Checkboxes for `Playlist`, `Auto-rename`, `Embed tags + cover art`.
+- **Drop zone** — drag a `.txt` onto the window:
+  - File contains YouTube URLs → batch-download mode.
+  - File contains plain song names → search-and-download mode (writes
+    `<input>.urls.txt` next to it, same as `--search --download`).
+- Live progress bar per file, `i/N` counter for batches, scrolling log.
+- **Cancel** button stops between files (and aborts the in-flight download).
+
+The window runs `download_audio()` on a `QThread`, piping yt-dlp's progress
+hook into Qt signals — the UI never freezes during long downloads.
+
 ## Project layout
 
 ```
 src/
   downloader.py   # core download_audio() — reusable from GUI / web / AI pipelines
   cli.py          # argparse wrapper
+  gui.py          # PySide6 single-window app (ydlg.bat launcher)
 requirements.txt
 ```
 
@@ -180,7 +206,7 @@ Features (implement on demand — use the `/add-feature` prompt to keep changes 
 - [ ] **Quality presets** — `highest | 320 | 256 | 128 | 64` for both audio and video
 - [ ] **Device presets** — `--for ios|android|windows|mac|linux|m4a|mp3|ogg` mapping to `(fmt, quality)` pairs
 - [ ] **Playlist / channel batch** — ~~drop `noplaylist=True`, add `--playlist` flag~~ ✅ done (also `--batch FILE` for ad-hoc URL lists)
-- [ ] **Desktop GUI** — PySide6 window (paste link, dropdowns, progress bar) reusing `download_audio()` on a `QThread`
+- [ ] **Desktop GUI** — ~~PySide6 window (paste link, dropdowns, progress bar) reusing `download_audio()` on a `QThread`~~ ✅ done (`python -m src.gui` or `ydlg.bat`)
 - [ ] **AI post-processing** — vocal removal, voice extraction, denoise, instrument isolation, loudness balance, audio upscale (Demucs + Resemble Enhance + pyloudnorm). See [.copilot/skills/ai-postprocess/SKILL.md](.copilot/skills/ai-postprocess/SKILL.md) for the build plan.
 - [ ] **Pip-install global command** — `pip install -e .` exposing a `ydl` console script
 
