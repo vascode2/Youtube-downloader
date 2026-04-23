@@ -1,6 +1,6 @@
 # YouTube Downloader (v1)
 
-Minimal Python CLI to download YouTube audio. v1 scope: audio-only, defaults to **128 kbps M4A** saved to `C:/Users/Yoon/Music/0_temp`.
+Minimal Python CLI to download YouTube audio. v1 scope: audio-only, defaults to **192 kbps M4A** saved to `C:/Users/Yoon/Music/0_temp`.
 
 ## Prerequisites
 
@@ -16,7 +16,7 @@ pip install -r requirements.txt
 ## Usage
 
 ```powershell
-# Default: 128k m4a into C:/Users/Yoon/Music/0_temp
+# Default: 192k m4a into C:/Users/Yoon/Music/0_temp
 python -m src.cli "https://www.youtube.com/watch?v=VIDEO_ID"
 
 # Override quality / format / output folder
@@ -50,7 +50,7 @@ The installer also sets your user-scope execution policy to `RemoteSigned` (Micr
 
 | Flag | Choices | Default |
 |------|---------|---------|
-| `--quality` | `64`, `128`, `192`, `256`, `320`, `highest` | `128` |
+| `--quality` | `64`, `128`, `192`, `256`, `320`, `highest` | `192` |
 | `--format` | `m4a`, `mp3`, `ogg` | `m4a` |
 | `--out` | any folder path | `C:/Users/Yoon/Music/0_temp` |
 | `--playlist` | (flag, no value) | off — downloads only the single `?v=` video |
@@ -102,7 +102,7 @@ Uses [mutagen](https://mutagen.readthedocs.io/) to write only the fields that ma
 For large lists, put URLs in a text file and pass `--batch`:
 
 ```powershell
-ydl --batch songs.txt                  # default 128k m4a
+ydl --batch songs.txt                  # default 192k m4a
 ydl --batch songs.txt --quality 192    # any other flag applies to all
 ```
 

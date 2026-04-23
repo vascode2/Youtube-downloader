@@ -18,7 +18,7 @@ Working notes for the AI agent. Things that bit us, decisions we made, and stuff
 
 - **CLI first, GUI later.** User explicitly chose Python CLI over browser extension / GUI / mobile. Browser extensions can't download YouTube directly (CORS + DRM); they'd need a local helper anyway.
 - **M4A default, not MP3.** YouTube serves AAC natively → M4A = no transcoding loss + better quality at 128k + native iOS/Mac support. MP3 is offered as an option for compatibility.
-- **128 kbps default** — matches user's primary use case (the screenshot showed 128k M4A for iOS).
+- **192 kbps default** — sweet spot for AAC music quality vs file size; user upgraded from 128k after the initial release.
 - **`yt-dlp`, never `pytube`.** pytube breaks frequently when YouTube changes its page format.
 - **No playlist support in v1** (per user). `noplaylist=True` is set explicitly.
 - **ffmpeg as external dep** — documented in README, not bundled. Bundling adds ~70MB and licensing complexity.

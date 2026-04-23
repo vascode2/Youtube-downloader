@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Minimal Python CLI wrapping `yt-dlp` + `ffmpeg` to download YouTube audio. v1 scope: audio-only, defaults to 128 kbps M4A. See [README.md](README.md) for user-facing usage and [CLAUDE.md](CLAUDE.md) for design decisions / gotchas.
+Minimal Python CLI wrapping `yt-dlp` + `ffmpeg` to download YouTube audio. v1 scope: audio-only, defaults to 192 kbps M4A. See [README.md](README.md) for user-facing usage and [CLAUDE.md](CLAUDE.md) for design decisions / gotchas.
 
 ## Architecture
 
@@ -19,7 +19,7 @@ Minimal Python CLI wrapping `yt-dlp` + `ffmpeg` to download YouTube audio. v1 sc
 
 ```powershell
 pip install -r requirements.txt
-python -m src.cli "<youtube-url>"                                  # default: 128k m4a
+python -m src.cli "<youtube-url>"                                  # default: 192k m4a
 python -m src.cli "<url>" --quality 320 --format mp3 --out "D:/x"  # overrides
 python -m src.cli --batch songs.txt                                # many URLs from file
 .\Install.bat                                                      # one-time: register `ydl` PowerShell function

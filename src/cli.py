@@ -39,7 +39,7 @@ def parse_batch_file(path: Path) -> list[str]:
 
 HELP_EPILOG = f"""\
 EXAMPLES
-  Download with all defaults (128kbps M4A into {DEFAULT_OUT_DIR}):
+  Download with all defaults (192kbps M4A into {DEFAULT_OUT_DIR}):
       ydl "https://www.youtube.com/watch?v=VIDEO_ID"
 
   No URL given -> reads URL from clipboard:
@@ -69,7 +69,7 @@ OPTIONS
   --quality {{64,128,192,256,320,highest}}
                          Target audio bitrate in kbps. 'highest' keeps the
                          best stream YouTube offers (no re-encoding).
-                         Default: 128 (good size/quality balance for music).
+                         Default: 192 (good size/quality balance for music).
   --format  {{m4a,mp3,ogg}}
                          Output container/codec. M4A is recommended (YouTube
                          serves AAC natively, so M4A = no transcoding loss
@@ -103,7 +103,7 @@ NOTES
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="ydl",
-        description="Download a YouTube video's audio track. Defaults to 128kbps M4A.",
+        description="Download a YouTube video's audio track. Defaults to 192kbps M4A.",
         epilog=HELP_EPILOG,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -114,9 +114,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--quality",
-        default="128",
+        default="192",
         choices=["64", "128", "192", "256", "320", "highest"],
-        help="Audio bitrate in kbps (default: 128)",
+        help="Audio bitrate in kbps (default: 192)",
     )
     p.add_argument(
         "--format",

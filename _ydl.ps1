@@ -1,6 +1,6 @@
 # ydl.ps1 — Quick-download helper.
 # Usage:
-#   .\ydl.ps1                       # downloads URL from clipboard with defaults (128k m4a)
+#   .\ydl.ps1                       # downloads URL from clipboard with defaults (192k m4a)
 #   .\ydl.ps1 "<url>"               # downloads given URL
 #   .\ydl.ps1 "<url>" --quality 320 --format mp3
 #

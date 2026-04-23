@@ -259,7 +259,7 @@ def _ensure_ffmpeg() -> None:
 
 def download_audio(
     url: str,
-    quality: str = "128",
+    quality: str = "192",
     fmt: str = "m4a",
     out_dir: str | Path = DEFAULT_OUT_DIR,
     progress_hook: Optional[Callable[[dict], None]] = None,
