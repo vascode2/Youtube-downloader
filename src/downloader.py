@@ -324,6 +324,10 @@ def download_audio(
         # whole video description (lyrics, promo links, hashtags) into the
         # `description`/`synopsis` tags. We write clean tags ourselves via
         # mutagen below using the parsed (Artist, Title).
+        #
+        # Convert the thumbnail to jpg first: m4a/mp3 can only embed JPEG/PNG,
+        # so without this step EmbedThumbnail silently leaves the .webp on disk.
+        postprocessors.append({"key": "FFmpegThumbnailsConvertor", "format": "jpg"})
         postprocessors.append({"key": "EmbedThumbnail", "already_have_thumbnail": False})
 
     ydl_opts: dict = {
@@ -385,6 +389,23 @@ def download_audio(
                 pass  # if move fails, just keep the file where it is
 
         if final.exists():
+            # Defensive cleanup: yt-dlp occasionally leaves the source stream
+            # (.webm/.opus/etc.) and/or the standalone thumbnail (.webp/.jpg)
+            # next to the converted file -- e.g. if EmbedThumbnail couldn't
+            # handle the thumbnail format, or if a postprocessor errored mid-
+            # chain. Delete any sibling with the SAME pre-rename stem and a
+            # known sidecar extension.
+            _sidecar_exts = {".webm", ".webp", ".jpg", ".jpeg", ".png", ".opus",
+                             ".mp4", ".mkv", ".m4a", ".mp3", ".ogg", ".part"}
+            for sib in pre.parent.glob(pre.stem + ".*"):
+                if sib == final:
+                    continue
+                if sib.suffix.lower() in _sidecar_exts:
+                    try:
+                        sib.unlink()
+                    except OSError:
+                        pass
+
             if rename:
                 cleaned = _clean_title(entry.get("title", final.stem))
                 target = final.with_name(_safe_filename(cleaned) + final.suffix)
