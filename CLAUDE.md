@@ -6,8 +6,8 @@ Working notes for the AI agent. Things that bit us, decisions we made, and stuff
 
 - **ffmpeg PATH does not refresh in the same PowerShell session after `winget install Gyan.FFmpeg`.** Open a new terminal, or invoke the shim at `$env:LOCALAPPDATA\Microsoft\WinGet\Links\ffmpeg.exe` directly.
 - The first `winget install` attempt for `Gyan.FFmpeg` silently exited without installing. Re-running with `--verbose` succeeded. If install seems to "do nothing", retry with `--verbose` before assuming it worked.
-- Python interpreter on this machine: `C:/Users/Yoon/AppData/Local/Microsoft/WindowsApps/python3.12.exe` (Windows Store Python 3.12). System install — no venv yet. The path is hardcoded in `ydl.ps1` — update there if Python moves.
-- Workspace path has a space (`g:\My Drive\...`). Always quote paths in PowerShell.
+- Python interpreter on this machine: `C:/Users/Yoon/AppData/Local/Microsoft/WindowsApps/python3.12.exe` (Windows Store Python 3.12). Path is hardcoded in `_ydl.ps1` and `ydlg.bat` — update both if Python moves. A `.venv/` exists in the repo root (gitignored); use it for dev/testing. The `ydl` shell function and `ydlg.bat` call the **system** Python directly (not the venv), so `yt-dlp` and `mutagen` must also be installed system-wide.
+- Canonical project location: `C:\Users\Yoon\Projects\Youtube-downloader` (no spaces in path). Always quote paths in PowerShell when working elsewhere.
 - **Direct `.ps1` execution is blocked** by default execution policy. Always go through `ydl.bat` (which passes `-ExecutionPolicy Bypass`). Don't tell users to run `.\_ydl.ps1` — they'll hit `UnauthorizedAccess`.
 - **PowerShell prefers `.ps1` over `.bat`** when both share a stem in PATH. That's why the script is named `_ydl.ps1` (underscore prefix) and only the `.bat` is named `ydl` — so `ydl` from PowerShell resolves to the bypass-wrapper, not the blocked script.
 - **PowerShell range gotcha**: `$args[1..0]` does NOT return empty when `$args.Count -eq 1`; it returns `@($args[1], $args[0])` (ranges are bidirectional). Always guard with `if ($args.Count -gt 1)` before slicing.
@@ -17,25 +17,23 @@ Working notes for the AI agent. Things that bit us, decisions we made, and stuff
 
 ## Design decisions (do not relitigate without asking)
 
-- **CLI first, GUI later.** User explicitly chose Python CLI over browser extension / GUI / mobile. Browser extensions can't download YouTube directly (CORS + DRM); they'd need a local helper anyway.
+- **CLI + GUI both ship.** CLI (`ydl`) for power users; PySide6 desktop GUI (`ydlg.bat`) for point-and-click use. Both call `download_audio()` directly — never subprocess each other.
 - **M4A default, not MP3.** YouTube serves AAC natively → M4A = no transcoding loss + better quality at 128k + native iOS/Mac support. MP3 is offered as an option for compatibility.
 - **192 kbps default** — sweet spot for AAC music quality vs file size; user upgraded from 128k after the initial release.
 - **`yt-dlp`, never `pytube`.** pytube breaks frequently when YouTube changes its page format.
-- **No playlist support in v1** (per user). `noplaylist=True` is set explicitly.
 - **ffmpeg as external dep** — documented in README, not bundled. Bundling adds ~70MB and licensing complexity.
 
 ## Code conventions
 
 - `downloader.py` stays UI-free. If you need to print or parse argv there, you're doing it wrong — push it to `cli.py`.
 - All user-actionable failures → `DownloaderError`. Let programmer errors bubble.
-- The progress hook prints with `\r` to stdout; it's overwritten by the post-processing line. If adding a GUI, pass a custom `progress_hook` rather than reading stdout.
+- The GUI (`src/gui.py`) uses a custom `progress_hook` that emits Qt signals back to the main thread. The hook raises `DownloaderError("Cancelled by user")` when the cancel flag is set.
 - yt-dlp's post-processing renames the file *after* `extract_info` returns. We reconstruct the final path via `prepare_filename` + the `fmt` extension, with a glob-based fallback. Don't trust `info["filepath"]` — it's the pre-processed file.
 
 ## Future expansion notes
 
 - **Adding video**: add `download_video(url, quality, container, out_dir)` in `downloader.py` with `format='bestvideo[ext=mp4]+bestaudio[ext=m4a]/best'` and `merge_output_format='mp4'`. Add `--video` flag in `cli.py` that dispatches to it. Don't merge audio+video into one mega-function.
 - **Device presets** (`--for ios|android|mp3|ogg|windows|mac|linux`): just a mapping table from preset → `(fmt, quality)`. Apply before calling `download_audio`. Keep the core function preset-unaware.
-- **GUI** (PySide6 recommended): `gui.py` imports `download_audio`, runs it on a `QThread`, pipes progress hook into a signal. Do not subprocess the CLI.
 - **AI processing** (vocal removal etc. — see screenshots in original request): chain after download. Likely tools: Demucs (vocal isolation), UVR-MDX-Net. These are heavy ML deps — make optional via `requirements-ai.txt`, don't pollute the base install.
 
 ## Verified test command
